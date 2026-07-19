@@ -83,20 +83,20 @@ export function Navbar() {
           <ThemeToggle />
 
           {!loading && !firebaseUser && (
-            <Button onClick={handleSignIn} size="sm" className="btn-primary hidden rounded-xl px-5 font-bold shadow-md sm:inline-flex">
+            <Button onClick={handleSignIn} size="sm" className="btn-primary rounded-xl px-3 sm:px-5 font-bold shadow-md text-xs sm:text-sm">
               Join with Google
             </Button>
           )}
 
           {user && (
             <>
-              <div className="hidden items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-sm font-semibold text-amber-600 dark:text-amber-400 sm:flex">
-                <Coins className="h-4 w-4" />
+              <div className="flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-600 dark:text-amber-400 sm:px-3 sm:py-1.5 sm:text-sm">
+                <Coins className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-500" />
                 {formatCoins(user.coins)}
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger className="rounded-full outline-none ring-brand-500 focus-visible:ring-2">
-                  <Avatar className="h-9 w-9 border-2 border-brand-500/40">
+                  <Avatar className="h-8 w-8 sm:h-9 sm:w-9 border-2 border-brand-500/40">
                     <AvatarImage src={user.photoURL ?? undefined} alt={user.displayName} />
                     <AvatarFallback>{initials(user.displayName)}</AvatarFallback>
                   </Avatar>
@@ -112,6 +112,11 @@ export function Navbar() {
                   <DropdownMenuItem asChild>
                     <Link href="/profile">
                       <User /> Profile
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/achievements">
+                      <Bot /> Achievements & Level
                     </Link>
                   </DropdownMenuItem>
                   {isAdmin && (
@@ -152,42 +157,66 @@ export function Navbar() {
             className="overflow-hidden border-b border-border/60 bg-background/95 backdrop-blur-xl lg:hidden"
           >
             <div className="container flex flex-col gap-1 py-4">
+              {user && (
+                <div className="mb-2 rounded-xl border bg-card/60 p-3 text-xs flex items-center justify-between">
+                  <div>
+                    <p className="font-bold text-foreground">{user.displayName}</p>
+                    <p className="text-muted-foreground">Level {user.level} (Max 50) · {formatCoins(user.xp)} XP</p>
+                  </div>
+                  <div className="flex items-center gap-1 font-bold text-amber-500">
+                    <Coins className="h-4 w-4" /> {formatCoins(user.coins)}
+                  </div>
+                </div>
+              )}
+
               {NAV_LINKS.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
                   className={cn(
                     "rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-                    pathname === link.href && "bg-accent text-foreground"
+                    pathname === link.href && "bg-accent text-foreground font-bold"
                   )}
                 >
                   {link.label}
                 </Link>
               ))}
+
               {user && (
-                <>
+                <div className="mt-2 pt-2 border-t space-y-1">
                   <Link
                     href="/quiz"
-                    className="rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+                    className="flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
                   >
-                    Quizzes
+                    <span>Quizzes</span>
+                    <span className="text-xs bg-uipath-orange/10 text-uipath-orange px-2 py-0.5 rounded-full font-bold">Play</span>
                   </Link>
                   <Link
                     href="/challenges"
-                    className="rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+                    className="flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
                   >
-                    Challenges
+                    <span>Weekly Challenges</span>
+                    <span className="text-xs bg-brand-500/10 text-brand-500 px-2 py-0.5 rounded-full font-bold">New</span>
                   </Link>
                   <Link
                     href="/certifications"
-                    className="rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+                    className="flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
                   >
-                    30-Day Certifications
+                    <span>30-Day Certifications</span>
                   </Link>
-                </>
+                  {isAdmin && (
+                    <Link
+                      href="/admin"
+                      className="flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-bold text-uipath-orange hover:bg-accent"
+                    >
+                      <span>Admin Dashboard</span>
+                    </Link>
+                  )}
+                </div>
               )}
+
               {!firebaseUser && !loading && (
-                <Button onClick={handleSignIn} className="mt-2">
+                <Button onClick={handleSignIn} className="mt-3 w-full font-bold">
                   Join with Google
                 </Button>
               )}

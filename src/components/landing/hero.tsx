@@ -103,47 +103,34 @@ export function HeroSection() {
               className="flex flex-col items-start text-left"
             >
               {/* Status chip — mono, square dot, Studio vibe */}
-              <div className="mb-6 inline-flex items-center gap-2.5 border border-uipath-text/15 bg-white px-4 py-2 font-mono text-[11px] font-semibold uppercase tracking-widest text-uipath-text shadow-sm dark:border-border dark:bg-card dark:text-foreground">
-                <span className="relative flex h-2.5 w-2.5">
+              <div className="mb-6 inline-flex items-center gap-2 border border-uipath-text/15 bg-white px-3.5 py-1.5 font-mono text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider sm:tracking-widest text-uipath-text shadow-sm dark:border-border dark:bg-card dark:text-foreground">
+                <span className="relative flex h-2.5 w-2.5 shrink-0">
                   <span className="absolute inline-flex h-full w-full animate-ping bg-uipath-orange opacity-60" />
                   <span className="relative inline-flex h-2.5 w-2.5 bg-uipath-orange" />
                 </span>
-                UiPath First Tamil Community · PSNA CET
+                <span>UiPath First Tamil Community · PSNA CET</span>
               </div>
 
-              <h1 className="font-display text-4xl font-extrabold leading-[1.08] tracking-tight text-uipath-text dark:text-foreground sm:text-5xl md:text-6xl">
+              <h1 className="font-display text-3xl font-extrabold leading-[1.1] tracking-tight text-uipath-text dark:text-foreground sm:text-5xl md:text-6xl">
                 Empowering the Next Generation of{" "}
-                <span className="mt-3 inline-block bg-uipath-orange px-3 py-1 text-white">
+                <span className="mt-2 sm:mt-3 inline-block bg-uipath-orange px-2.5 sm:px-3 py-1 text-white">
                   <RotatingText words={ROTATING_WORDS} />
                 </span>
               </h1>
 
-              <p className="mt-6 max-w-xl text-base leading-relaxed text-uipath-mutedText dark:text-muted-foreground sm:text-lg">
+              <p className="mt-6 max-w-xl text-sm leading-relaxed text-uipath-mutedText dark:text-muted-foreground sm:text-lg">
                 {SITE.description} Learn RPA, compete in weekly quizzes, earn
                 gold coins, and fast-track your enterprise career.
               </p>
 
               {/* Activity chips wired like Studio activities */}
-              <div className="mt-7 flex flex-wrap items-center font-mono text-xs font-semibold">
+              <div className="mt-7 flex flex-wrap items-center gap-2 font-mono text-xs font-semibold">
                 {ACTIVITY_CHIPS.map((chip, i) => {
                   const Icon = chip.icon;
                   return (
                     <div key={chip.label} className="flex items-center">
-                      {i > 0 && (
-                        <svg width="28" height="10" className="text-uipath-blue/50">
-                          <line
-                            x1="0"
-                            y1="5"
-                            x2="28"
-                            y2="5"
-                            stroke="currentColor"
-                            strokeWidth="1.5"
-                            className="wire-dash"
-                          />
-                        </svg>
-                      )}
                       <span
-                        className={`flex items-center gap-1.5 border bg-white px-3 py-1.5 shadow-sm dark:bg-card ${chip.color}`}
+                        className={`flex items-center gap-1.5 border bg-white px-2.5 py-1 sm:px-3 sm:py-1.5 shadow-sm dark:bg-card text-[11px] sm:text-xs ${chip.color}`}
                       >
                         <Icon className="h-3.5 w-3.5" />
                         {chip.label}
@@ -153,14 +140,14 @@ export function HeroSection() {
                 })}
               </div>
 
-              <div className="mt-9 flex flex-wrap items-center gap-4">
+              <div className="mt-9 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
                 <Magnetic>
                   <Button
                     asChild
                     size="lg"
-                    className="btn-primary rounded-none px-8 text-base font-bold shadow-lg"
+                    className="btn-primary rounded-none px-6 sm:px-8 text-base font-bold shadow-lg w-full sm:w-auto justify-center"
                   >
-                    <Link href="/login" className="flex items-center gap-2">
+                    <Link href="/login" className="flex items-center justify-center gap-2">
                       Join Community Free
                       <ArrowRight className="h-4 w-4" />
                     </Link>
@@ -171,9 +158,9 @@ export function HeroSection() {
                     asChild
                     size="lg"
                     variant="outline"
-                    className="rounded-none border-2 border-uipath-text/80 bg-transparent px-8 text-base font-bold text-uipath-text hover:bg-uipath-text hover:text-white dark:border-foreground/70 dark:text-foreground dark:hover:bg-foreground dark:hover:text-background"
+                    className="rounded-none border-2 border-uipath-text/80 bg-transparent px-6 sm:px-8 text-base font-bold text-uipath-text hover:bg-uipath-text hover:text-white dark:border-foreground/70 dark:text-foreground dark:hover:bg-foreground dark:hover:text-background w-full sm:w-auto justify-center"
                   >
-                    <Link href="/leaderboard">View Leaderboard</Link>
+                    <Link href="/leaderboard" className="flex justify-center">View Leaderboard</Link>
                   </Button>
                 </Magnetic>
               </div>

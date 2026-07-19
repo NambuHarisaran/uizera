@@ -135,18 +135,18 @@ export function AchievementsContent() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                      <div className="rounded-xl border bg-muted/30 px-4 py-2 text-center">
-                        <p className="font-display text-lg font-bold text-amber-500">
+                    <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-3 w-full sm:w-auto">
+                      <div className="rounded-xl border bg-muted/30 px-3 py-2 text-center">
+                        <p className="font-display text-base sm:text-lg font-bold text-amber-500">
                           {unlockedBadges.size} / {BADGES.length}
                         </p>
-                        <p className="text-[11px] text-muted-foreground">Badges</p>
+                        <p className="text-[10px] sm:text-[11px] text-muted-foreground">Badges</p>
                       </div>
-                      <div className="rounded-xl border bg-muted/30 px-4 py-2 text-center">
-                        <p className="font-display text-lg font-bold text-emerald-500">
+                      <div className="rounded-xl border bg-muted/30 px-3 py-2 text-center">
+                        <p className="font-display text-base sm:text-lg font-bold text-emerald-500">
                           {quests.filter((q) => q.claimed).length} / {quests.length}
                         </p>
-                        <p className="text-[11px] text-muted-foreground">Quests Done</p>
+                        <p className="text-[10px] sm:text-[11px] text-muted-foreground">Quests Done</p>
                       </div>
                     </div>
                   </div>

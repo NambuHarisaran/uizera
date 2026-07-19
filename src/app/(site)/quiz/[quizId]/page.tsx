@@ -232,7 +232,7 @@ export default function QuizPlayPage({ params }: { params: Promise<{ quizId: str
         <h1 className="font-display text-3xl font-bold">{quiz.title}</h1>
         {quiz.description && <p className="mt-2 text-muted-foreground">{quiz.description}</p>}
 
-        <div className="mt-8 grid gap-4 sm:grid-cols-3">
+        <div className="mt-8 grid gap-4 grid-cols-1 sm:grid-cols-3">
           <div className="rounded-xl border bg-muted/30 p-4 text-center">
             <HelpCircle className="mx-auto mb-2 h-5 w-5 text-brand-500" />
             <p className="font-display text-lg font-bold">{quiz.questionCount}</p>
@@ -256,7 +256,7 @@ export default function QuizPlayPage({ params }: { params: Promise<{ quizId: str
           </div>
         </div>
 
-        <div className="mt-8 flex gap-4">
+        <div className="mt-8 flex flex-col sm:flex-row gap-3">
           <Button variant="outline" onClick={() => router.push("/quiz")} className="flex-1">
             Back to List
           </Button>

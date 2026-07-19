@@ -109,14 +109,14 @@ export default function QuizResultsPage({ params }: { params: Promise<{ quizId: 
               </div>
             </div>
 
-            <div className="mt-8 flex flex-wrap justify-center gap-3">
-              <Button variant="outline" onClick={() => router.push("/quiz")} className="gap-2">
+            <div className="mt-8 flex flex-col sm:flex-row justify-center gap-3">
+              <Button variant="outline" onClick={() => router.push("/quiz")} className="gap-2 w-full sm:w-auto">
                 <ArrowLeft className="h-4 w-4" /> All Quizzes
               </Button>
-              <Button onClick={() => router.push("/achievements")} className="gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white">
+              <Button onClick={() => router.push("/achievements")} className="gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white w-full sm:w-auto">
                 <Award className="h-4 w-4" /> View Achievements
               </Button>
-              <Button variant="secondary" onClick={() => router.push("/leaderboard")}>
+              <Button variant="secondary" onClick={() => router.push("/leaderboard")} className="w-full sm:w-auto">
                 Leaderboard
               </Button>
             </div>

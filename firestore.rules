@@ -1,0 +1,152 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UI Zera Platform — Firestore Security Rules
+//
+// Security model: ALL writes flow through the trusted Next.js server or Cloud
+// Functions using the Admin SDK (which bypasses these rules). The client SDK
+// therefore gets a strictly read-only, scoped surface. Every write from a
+// client is denied. This makes coin manipulation, fake submissions, leaderboard
+// abuse, and rule-bypass writes structurally impossible from the browser.
+//
+// Roles are carried in verified Firebase Auth custom claims
+// (request.auth.token.role), set exclusively server-side.
+// ─────────────────────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && request.auth.token.role in ['admin', 'super_admin'];
+    }
+
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // ── Users: private profile + coin balances. Owner + admins read only. ──
+    match /users/{uid} {
+      allow read: if isSelf(uid) || isAdmin();
+      allow write: if false;
+    }
+
+    // ── Leaderboard: public-safe mirror (no emails, no private data). ──
+    match /leaderboard/{uid} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ── Quizzes: metadata visible once published. Questions are served
+    //    exclusively by the server AFTER an attempt starts; the answer key
+    //    is never readable by any client, including admins (server-only). ──
+    match /quizzes/{quizId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.status in ['scheduled', 'live', 'closed']);
+      allow write: if false;
+
+      match /questions/{questionId} {
+        allow read: if isAdmin();
+        allow write: if false;
+      }
+
+      match /answerKey/{docId} {
+        allow read, write: if false;
+      }
+    }
+
+    // ── Quiz attempts: owner and admins can read; graded server-side only. ──
+    match /quizAttempts/{attemptId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow write: if false;
+    }
+
+    // ── Weekly challenges ──
+    match /challenges/{challengeId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.status != 'draft');
+      allow write: if false;
+    }
+
+    // ── Challenge submissions: owner + admins read. Created/updated only via
+    //    the server API, which enforces deadlines and one-per-student. ──
+    match /submissions/{submissionId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow write: if false;
+    }
+
+    // ── 30-day certification program (Day 1..30 definitions) ──
+    match /certProgram/{dayId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // ── Certification progress: owner + admins read; admin-verified via API. ──
+    match /certProgress/{uid} {
+      allow read: if isSelf(uid) || isAdmin();
+      allow write: if false;
+    }
+
+    // ── Coin ledger: append-only via server; owner sees own history. ──
+    match /coinTransactions/{txId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow write: if false;
+    }
+
+    // ── Public content (visible logged-out on the landing site) ──
+    match /announcements/{id} {
+      allow read: if resource.data.published == true || isAdmin();
+      allow write: if false;
+    }
+
+    match /events/{id} {
+      allow read: if resource.data.published == true || isAdmin();
+      allow write: if false;
+    }
+
+    match /resources/{id} {
+      allow read: if resource.data.published == true || isAdmin();
+      allow write: if false;
+    }
+
+    match /gallery/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /team/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ── Audit logs: admins read; server writes only (append-only). ──
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // ── App config ──
+    match /config/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // ── Contact messages: server-created (validated + rate limited). ──
+    match /contactMessages/{msgId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // ── Default deny: anything not matched above is unreachable. ──
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

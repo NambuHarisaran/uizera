@@ -1,0 +1,53 @@
+rules_version = '2';
+
+// UI Zera Platform — Storage Rules
+// Clients may only upload challenge submissions into their OWN folder and
+// their own avatar, with strict size + content-type limits. Everything else
+// is written by the server (Admin SDK) only.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && request.auth.token.role in ['admin', 'super_admin'];
+    }
+
+    // Public assets (event covers, quiz images, gallery) — uploaded via server.
+    match /public/{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Challenge submissions: owner-scoped path prevents cross-user tampering.
+    match /submissions/{uid}/{challengeId}/{fileName} {
+      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
+      allow create, update: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.size < 20 * 1024 * 1024
+        && request.resource.contentType.matches(
+             '(image/.*|application/pdf|application/zip|application/x-zip-compressed|text/plain|video/mp4)'
+           );
+      allow delete: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Avatars: own folder, images only, 5 MB cap.
+    match /avatars/{uid}/{fileName} {
+      allow read: if true;
+      allow create, update: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Default deny.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

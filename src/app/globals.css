@@ -1,0 +1,146 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 14 96% 53%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 14 96% 53%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 240 10% 3.5%;
+    --foreground: 0 0% 98%;
+    --card: 240 8% 5.5%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 8% 5%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 14 96% 53%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 5% 11%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 5% 11%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 5% 13%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5% 14%;
+    --input: 240 5% 14%;
+    --ring: 14 96% 53%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "ss01", "cv11";
+  }
+
+  ::selection {
+    @apply bg-brand-500/30;
+  }
+}
+
+@layer utilities {
+  /* Frosted glass surface */
+  .glass {
+    @apply border border-white/10 bg-white/[0.06] backdrop-blur-xl;
+  }
+  .glass-light {
+    @apply border border-black/5 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.06];
+  }
+
+  /* Brand gradient text */
+  .text-gradient {
+    @apply bg-gradient-to-r from-brand-400 via-brand-500 to-amber-500 bg-clip-text text-transparent;
+  }
+
+  .text-gradient-subtle {
+    @apply bg-gradient-to-b from-foreground to-foreground/60 bg-clip-text text-transparent;
+  }
+
+  /* Soft radial glow behind heroes */
+  .hero-glow {
+    background:
+      radial-gradient(600px circle at 20% 20%, hsl(14 96% 53% / 0.15), transparent 60%),
+      radial-gradient(800px circle at 80% 30%, hsl(35 95% 55% / 0.10), transparent 60%),
+      radial-gradient(700px circle at 50% 90%, hsl(14 96% 53% / 0.08), transparent 60%);
+  }
+
+  /* Dotted grid background */
+  .bg-grid {
+    background-image: radial-gradient(
+      circle,
+      hsl(var(--foreground) / 0.08) 1px,
+      transparent 1px
+    );
+    background-size: 28px 28px;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* Slim, unobtrusive scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.25);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.4);
+  background-clip: content-box;
+  border: 2px solid transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

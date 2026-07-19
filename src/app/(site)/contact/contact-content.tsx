@@ -4,7 +4,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Instagram, Linkedin, Mail, MapPin, MessageCircle, Send, Twitter } from "lucide-react";
+import { Instagram, Linkedin, Mail, MapPin, MessageCircle, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +25,6 @@ const contactInfo = [
 const socials = [
   { icon: Instagram, label: "Instagram", href: SITE.social.instagram },
   { icon: Linkedin, label: "LinkedIn", href: SITE.social.linkedin },
-  { icon: Twitter, label: "X (Twitter)", href: SITE.social.twitter },
 ];
 
 export function ContactContent() {

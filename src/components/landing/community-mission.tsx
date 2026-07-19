@@ -86,7 +86,7 @@ export function CommunityMission() {
       <div className="container relative mx-auto max-w-6xl">
         <SectionHeading
           badge="Our Mission"
-          title="Why Join UI Zera?"
+          title="Why Join UiZera?"
           description="We're building the most engaged student automation community in Tamil Nadu. Here's what you get when you join."
         />
 

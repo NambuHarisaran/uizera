@@ -10,7 +10,7 @@ const testimonials = [
     name: "Harish S",
     role: "III Year, CSBS",
     quote:
-      "UI Zera completely changed how I see my career. The 30-day certification sprint pushed me to achieve more in a month than I did in a whole semester.",
+      "UiZera completely changed how I see my career. The 30-day certification sprint pushed me to achieve more in a month than I did in a whole semester.",
     rating: 5,
   },
   {

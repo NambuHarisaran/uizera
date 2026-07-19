@@ -77,7 +77,7 @@ export function ProfileContent() {
     setSaving(true);
     try {
       const res = await fetch("/api/profile", {
-        method: "PATCH",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });

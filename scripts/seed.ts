@@ -1,5 +1,5 @@
 /**
- * Database Seed Script for UI Zera Platform
+ * Database Seed Script for UiZera Platform
  *
  * Usage:
  *   npx tsx scripts/seed.ts
@@ -93,7 +93,7 @@ async function seed() {
       photo: null,
       linkedin: "https://linkedin.com",
       email: "coordinator@psnacet.edu.in",
-      bio: "RPA developer & student lead for UI Zera Club.",
+      bio: "RPA developer & student lead for UiZera Club.",
       order: 2,
     },
   ];
@@ -104,8 +104,8 @@ async function seed() {
   // 3. Seed Sample Announcement
   console.log("  → Seeding Initial Announcement...");
   await db.collection("announcements").doc("welcome-post").set({
-    title: "Welcome to the UI Zera Community Platform! 🎉",
-    body: "We are thrilled to launch the official web platform for UI Zera Club at PSNA CET. Explore quizzes, weekly challenges, 30-day certification sprints, and climb the leaderboard!",
+    title: "Welcome to the UiZera Community Platform! 🎉",
+    body: "We are thrilled to launch the official web platform for UiZera Club at PSNA CET. Explore quizzes, weekly challenges, 30-day certification sprints, and climb the leaderboard!",
     priority: "important",
     pinned: true,
     published: true,

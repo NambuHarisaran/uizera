@@ -1,5 +1,5 @@
 /**
- * Seed the real UI Zera team roster into Firestore.
+ * Seed the real UiZera team roster into Firestore.
  * Replaces every existing document in the `team` collection.
  *
  * Usage:

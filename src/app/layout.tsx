@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     "RPA",
     "automation",
     "PSNA",
-    "UI Zera",
+    "UiZera",
     "Tamil community",
     "student developer",
     "Industry 4.0",

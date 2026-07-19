@@ -40,7 +40,7 @@ export default function AdminUsersPage() {
     setUpdatingUid(uid);
     try {
       const res = await fetch(`/api/admin/users/${uid}/role`, {
-        method: "PATCH",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role: newRole }),
       });
@@ -61,7 +61,7 @@ export default function AdminUsersPage() {
     setUpdatingUid(uid);
     try {
       const res = await fetch(`/api/admin/users/${uid}/status`, {
-        method: "PATCH",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ disabled: !currentDisabled }),
       });

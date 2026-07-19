@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// UI Zera Platform — Firestore Security Rules
+// UiZera Platform — Firestore Security Rules
 //
 // Security model: ALL writes flow through the trusted Next.js server or Cloud
 // Functions using the Admin SDK (which bypasses these rules). The client SDK

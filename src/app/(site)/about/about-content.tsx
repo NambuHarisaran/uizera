@@ -54,7 +54,7 @@ const timeline = [
     year: "2024",
     title: "Club Formation",
     description:
-      "UI Zera Club was officially formed under the Department of Computer Science & Business Systems with faculty mentorship.",
+      "UiZera Club was officially formed under the Department of Computer Science & Business Systems with faculty mentorship.",
   },
   {
     year: "2025",
@@ -66,7 +66,7 @@ const timeline = [
     year: "2026",
     title: "Digital Platform",
     description:
-      "Launch of the UI Zera platform — quizzes, leaderboards, challenges, and a complete digital ecosystem for automation learning.",
+      "Launch of the UiZera platform — quizzes, leaderboards, challenges, and a complete digital ecosystem for automation learning.",
   },
 ];
 

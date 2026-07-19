@@ -97,6 +97,12 @@ export async function parseBody<T>(
     throw new ApiError(400, "Invalid JSON body.");
   }
   const parsed = schema.safeParse(raw);
-  if (!parsed.success) throw new ApiError(400, "Invalid request data.");
+  if (!parsed.success) {
+    const detail = parsed.error.issues
+      .slice(0, 3)
+      .map((i) => `${i.path.join(".") || "body"}: ${i.message}`)
+      .join("; ");
+    throw new ApiError(400, `Invalid request data — ${detail}`);
+  }
   return parsed.data;
 }

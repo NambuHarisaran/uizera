@@ -84,6 +84,7 @@ export interface Quiz {
   questionCount: number;
   totalPoints: number;
   coinsPerPoint: number;
+  xpReward?: number;
   settings: QuizSettings;
   createdBy: string;
   createdAt: FireTimestamp;
@@ -128,6 +129,7 @@ export interface QuizAttempt {
   maxScore: number;
   correctCount: number;
   coinsEarned: number;
+  xpEarned?: number;
   startedAt: FireTimestamp;
   deadlineAt: FireTimestamp;
   submittedAt: FireTimestamp;
@@ -159,6 +161,7 @@ export interface Challenge {
   instructions: string;
   resources: ChallengeResource[];
   coins: number;
+  xp?: number;
   status: ChallengeStatus;
   deadline: FireTimestamp;
   createdBy: string;
@@ -200,6 +203,7 @@ export interface CertDay {
   description: string;
   link: string;
   coins: number;
+  xp?: number;
   unlockDate: FireTimestamp;
 }
 
@@ -231,6 +235,7 @@ export type CoinSource =
   | "special_activity"
   | "community_contribution"
   | "certification"
+  | "quest_reward"
   | "admin_adjustment";
 
 export interface CoinTransaction {
@@ -332,7 +337,7 @@ export interface TeamMember {
   order: number;
 }
 
-// ── Badges & levels ─────────────────────────────────────────────────────────
+// ── Badges, quests & levels ──────────────────────────────────────────────────
 
 export interface BadgeDef {
   id: string;
@@ -340,6 +345,20 @@ export interface BadgeDef {
   description: string;
   icon: string; // lucide icon name
   tier: "bronze" | "silver" | "gold" | "legend";
+}
+
+export interface Quest {
+  id: string;
+  title: string;
+  description: string;
+  rewardXp: number;
+  rewardCoins: number;
+  category: "daily" | "lifetime";
+  icon: string;
+  current: number;
+  target: number;
+  completed: boolean;
+  claimed: boolean;
 }
 
 // ── API envelopes ───────────────────────────────────────────────────────────

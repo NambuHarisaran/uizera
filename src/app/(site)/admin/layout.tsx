@@ -70,7 +70,7 @@ export default function AdminLayout({
             Admin <span className="text-gradient">Panel</span>
           </h2>
           <p className="mb-6 px-3 text-xs text-muted-foreground">
-            Manage the UI Zera platform
+            Manage the UiZera platform
           </p>
           <nav className="space-y-1">
             {sidebarLinks.map((link) => {

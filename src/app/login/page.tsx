@@ -5,7 +5,7 @@ import { LoginCard } from "./login-card";
 
 export const metadata: Metadata = {
   title: "Sign in",
-  description: "Sign in to the UI Zera Club community platform with Google.",
+  description: "Sign in to the UiZera Club community platform with Google.",
 };
 
 export default function LoginPage() {

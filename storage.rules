@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// UI Zera Platform — Storage Rules
+// UiZera Platform — Storage Rules
 // Clients may only upload challenge submissions into their OWN folder and
 // their own avatar, with strict size + content-type limits. Everything else
 // is written by the server (Admin SDK) only.

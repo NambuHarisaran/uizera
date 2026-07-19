@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AnnouncementBanner } from "@/components/landing/announcement-banner";
 import { HeroSection } from "@/components/landing/hero";
 import { StatsBar } from "@/components/landing/stats-bar";
 import { WhyRpaSection } from "@/components/landing/why-rpa";
@@ -9,7 +10,7 @@ import { FaqSection } from "@/components/landing/faq";
 import { CtaSection } from "@/components/landing/cta-section";
 
 export const metadata: Metadata = {
-  title: "UI Zera Club — Empowering the Next Generation of Automation Leaders",
+  title: "UiZera Club — Empowering the Next Generation of Automation Leaders",
   description:
     "The UiPath first Tamil community at PSNA College of Engineering & Technology. Quizzes, challenges, certifications, and a launchpad for RPA careers.",
 };
@@ -17,6 +18,7 @@ export const metadata: Metadata = {
 export default function HomePage() {
   return (
     <>
+      <AnnouncementBanner />
       <HeroSection />
       <StatsBar />
       <WhyRpaSection />

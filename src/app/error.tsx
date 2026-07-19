@@ -23,7 +23,7 @@ export default function GlobalError({
       <h1 className="font-display text-2xl font-bold">Something went wrong</h1>
       <p className="mt-2 max-w-md text-sm text-muted-foreground">
         An unexpected error occurred. Try again — if it keeps happening, let the
-        UI Zera team know.
+        UiZera team know.
       </p>
       <Button onClick={reset} className="mt-8">
         Try again

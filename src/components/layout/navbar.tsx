@@ -39,7 +39,7 @@ export function Navbar() {
   const handleSignIn = async () => {
     try {
       await signInWithGoogle();
-      toast.success("Welcome to UI Zera!");
+      toast.success("Welcome to UiZera!");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Sign-in failed.");
     }

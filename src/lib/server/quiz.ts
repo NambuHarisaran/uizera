@@ -16,6 +16,7 @@ export function buildQuizDocs(input: {
   endAt: number;
   durationSeconds: number;
   coinsPerPoint: number;
+  xpReward?: number;
   settings: any;
   questions: any[];
 }) {
@@ -52,6 +53,7 @@ export function buildQuizDocs(input: {
     questionCount: input.questions.length,
     totalPoints,
     coinsPerPoint: input.coinsPerPoint,
+    xpReward: input.xpReward ?? (totalPoints * 10 || 100),
     settings: input.settings,
     updatedAt: FieldValue.serverTimestamp(),
   };

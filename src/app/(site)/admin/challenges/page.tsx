@@ -29,6 +29,7 @@ export default function AdminChallengesPage() {
   const [description, setDescription] = useState("");
   const [instructions, setInstructions] = useState("");
   const [coins, setCoins] = useState(100);
+  const [xp, setXp] = useState(150);
   const [status, setStatus] = useState<ChallengeStatus>("open");
   const [deadline, setDeadline] = useState("");
 
@@ -49,6 +50,7 @@ export default function AdminChallengesPage() {
         instructions,
         resources: [],
         coins: Number(coins),
+        xp: Number(xp),
         status,
         deadline: new Date(deadline).getTime(),
       };
@@ -109,7 +111,7 @@ export default function AdminChallengesPage() {
               <DialogTitle>Create Weekly Challenge</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-2">
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-3">
                 <div>
                   <Label>Week Number</Label>
                   <Input
@@ -119,11 +121,19 @@ export default function AdminChallengesPage() {
                   />
                 </div>
                 <div>
-                  <Label>Coins Awarded</Label>
+                  <Label>Coins</Label>
                   <Input
                     type="number"
                     value={coins}
                     onChange={(e) => setCoins(Number(e.target.value))}
+                  />
+                </div>
+                <div>
+                  <Label>XP Reward</Label>
+                  <Input
+                    type="number"
+                    value={xp}
+                    onChange={(e) => setXp(Number(e.target.value))}
                   />
                 </div>
               </div>

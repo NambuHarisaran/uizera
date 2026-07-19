@@ -29,7 +29,7 @@ const slides: Slide[] = [
   {
     activity: "ROBOT",
     badge: "UIPATH FIRST TAMIL COMMUNITY",
-    title: "UI Zera Club",
+    title: "UiZera Club",
     subtitle: "Empowering 100+ Students with RPA & Agentic AI",
     color: ORANGE,
   },

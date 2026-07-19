@@ -9,7 +9,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetcher } from "@/lib/fetcher";
+import { fetcher, postJson, unwrap } from "@/lib/fetcher";
 import type {
   AppUser,
   LeaderboardEntry,
@@ -27,6 +27,7 @@ import type {
   LearningResource,
   GalleryItem,
   TeamMember,
+  Quest,
 } from "@/types";
 
 // ── Keys ────────────────────────────────────────────────────────────────────
@@ -49,6 +50,7 @@ export const queryKeys = {
   resources: ["resources"] as const,
   team: ["team"] as const,
   gallery: ["gallery"] as const,
+  achievements: ["achievements"] as const,
   // Admin
   adminUsers: ["admin", "users"] as const,
   adminQuizzes: ["admin", "quizzes"] as const,
@@ -215,5 +217,38 @@ export function useAdminChallenges() {
     queryFn: () =>
       fetcher<{ challenges: Challenge[] }>("/api/admin/challenges"),
     staleTime: 15_000,
+  });
+}
+
+// ── Achievements & Quests ───────────────────────────────────────────────────
+
+export function useAchievements() {
+  return useQuery({
+    queryKey: queryKeys.achievements,
+    queryFn: () =>
+      fetcher<{
+        xp: number;
+        level: number;
+        progress: number;
+        currentLevelFloor: number;
+        nextLevelXp: number;
+        badges: string[];
+        quests: Quest[];
+      }>("/api/achievements"),
+    staleTime: 10_000,
+  });
+}
+
+export function useClaimQuest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (questId: string) => {
+      const res = await postJson<{ newCoins: number; xpAwarded: number; coinsAwarded: number }>("/api/achievements/claim", { questId });
+      return unwrap(res);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.achievements });
+      queryClient.invalidateQueries({ queryKey: queryKeys.profile });
+    },
   });
 }

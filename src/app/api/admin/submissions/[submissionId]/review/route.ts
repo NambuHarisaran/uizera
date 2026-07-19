@@ -55,6 +55,11 @@ export async function POST(
           ? Math.max(0, body.coins ?? challenge?.coins ?? 0)
           : 0;
 
+      const xp =
+        body.decision === "approved"
+          ? Math.max(0, challenge?.xp ?? 150)
+          : 0;
+
       tx.update(submissionRef, {
         status: body.decision,
         feedback: body.feedback || null,
@@ -69,7 +74,7 @@ export async function POST(
         }),
       });
 
-      return { submission, coins };
+      return { submission, coins, xp };
     });
 
     let newBadges: string[] = [];
@@ -78,6 +83,7 @@ export async function POST(
         const award = await awardCoins({
           uid: outcome.submission.uid,
           amount: Math.max(1, outcome.coins),
+          xpAmount: outcome.xp,
           source: "weekly_task",
           reason: `Challenge approved: ${outcome.submission.challengeTitle}`,
           refId: submissionId,

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
-  description: "Privacy Policy for UI Zera Club platform at PSNA CET.",
+  description: "Privacy Policy for UiZera Club platform at PSNA CET.",
 };
 
 export default function PrivacyPage() {

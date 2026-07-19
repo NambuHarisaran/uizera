@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
-  description: "Terms of Service for UI Zera Club platform at PSNA CET.",
+  description: "Terms of Service for UiZera Club platform at PSNA CET.",
 };
 
 export default function TermsPage() {
@@ -14,7 +14,7 @@ export default function TermsPage() {
       <div className="prose prose-sm dark:prose-invert mt-10 max-w-none">
         <h2>1. Acceptance</h2>
         <p>
-          By accessing or using the UI Zera Club platform, you agree to these terms. If you
+          By accessing or using the UiZera Club platform, you agree to these terms. If you
           do not agree, please do not use the platform.
         </p>
 
@@ -43,7 +43,7 @@ export default function TermsPage() {
 
         <h2>5. Content</h2>
         <p>
-          By submitting content (challenge submissions, profile information), you grant UI Zera Club
+          By submitting content (challenge submissions, profile information), you grant UiZera Club
           the right to display it within the platform. You retain ownership of your submissions.
         </p>
 
@@ -54,7 +54,7 @@ export default function TermsPage() {
 
         <h2>7. Disclaimer</h2>
         <p>
-          This platform is provided &ldquo;as is&rdquo; without warranties of any kind. UI Zera Club
+          This platform is provided &ldquo;as is&rdquo; without warranties of any kind. UiZera Club
           is a student community and not affiliated with UiPath Inc.
         </p>
 

@@ -1,17 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Player } from "@remotion/player";
+import { useEffect, useRef, useState } from "react";
+import { Player, type PlayerRef } from "@remotion/player";
 import { useTheme } from "next-themes";
 import { HeroVideoComposition } from "./hero-composition";
 
 export function HeroRemotionPlayer() {
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const playerRef = useRef<PlayerRef>(null);
 
-  // First client render must match SSR (light); theme applies after mount.
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const dark = mounted && resolvedTheme === "dark";
+
+  useEffect(() => {
+    if (mounted && playerRef.current) {
+      playerRef.current.play();
+    }
+  }, [mounted]);
 
   return (
     <div className="relative overflow-hidden border border-uipath-text/15 bg-white p-2 shadow-card dark:border-border dark:bg-card">
@@ -23,25 +32,31 @@ export function HeroRemotionPlayer() {
         <span className="text-uipath-orange">PSNA CET · UiPath Community</span>
       </div>
       <div className="aspect-video w-full overflow-hidden">
-        <Player
-          key={dark ? "dark" : "light"}
-          component={HeroVideoComposition}
-          inputProps={{ dark }}
-          durationInFrames={360}
-          compositionWidth={800}
-          compositionHeight={450}
-          fps={30}
-          autoPlay
-          loop
-          clickToPlay={false}
-          doubleClickToFullscreen={false}
-          spaceKeyToPlayOrPause={false}
-          acknowledgeRemotionLicense
-          style={{
-            width: "100%",
-            height: "100%",
-          }}
-        />
+        {mounted ? (
+          <Player
+            ref={playerRef}
+            component={HeroVideoComposition}
+            inputProps={{ dark }}
+            durationInFrames={360}
+            compositionWidth={800}
+            compositionHeight={450}
+            fps={30}
+            autoPlay
+            loop
+            clickToPlay={false}
+            doubleClickToFullscreen={false}
+            spaceKeyToPlayOrPause={false}
+            acknowledgeRemotionLicense
+            style={{
+              width: "100%",
+              height: "100%",
+            }}
+          />
+        ) : (
+          <div className="h-full w-full bg-muted/20 animate-pulse flex items-center justify-center">
+            <span className="font-mono text-xs text-muted-foreground">Loading Showcase...</span>
+          </div>
+        )}
       </div>
     </div>
   );

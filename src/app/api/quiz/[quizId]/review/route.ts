@@ -31,20 +31,16 @@ export async function GET(
     const user = await requireUser();
     const { quizId } = await params;
 
-    const quiz = await getQuizOrThrow(quizId);
-    if (!quiz.settings.showReview) {
-      throw new ApiError(403, "Review is not enabled for this quiz.");
-    }
-    const ended = quiz.status === "closed" || Date.now() > toMillis(quiz.endAt);
-    if (!ended) {
-      throw new ApiError(403, "Review unlocks after the quiz ends.");
-    }
+    const attemptId =
+      req.nextUrl.searchParams.get("attemptId") ||
+      req.nextUrl.searchParams.get("attempt") ||
+      "";
 
-    const attemptId = req.nextUrl.searchParams.get("attempt") ?? "";
     if (!attemptId.startsWith(`${quizId}_${user.uid}_`)) {
       throw new ApiError(403, "This attempt does not belong to you.");
     }
 
+    const quiz = await getQuizOrThrow(quizId);
     const snap = await adminDb().collection("quizAttempts").doc(attemptId).get();
     if (!snap.exists) throw new ApiError(404, "Attempt not found.");
     const attempt = snap.data() as QuizAttempt;
@@ -89,9 +85,10 @@ export async function GET(
     });
 
     return jsonOk({
-      quizTitle: quiz.title,
-      score: attempt.score,
-      maxScore: attempt.maxScore,
+      attempt: {
+        ...attempt,
+        quizTitle: quiz.title,
+      },
       items,
     });
   });

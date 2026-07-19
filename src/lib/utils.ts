@@ -35,18 +35,21 @@ export function initials(name: string): string {
     .join("");
 }
 
-/** Level curve shared with Cloud Functions: level n needs 100·n² lifetime XP. */
+/** Level curve: Max level is 50. level n requires 100·(n-1)² lifetime XP. */
 export function levelForXp(xp: number): number {
-  return Math.max(1, Math.floor(Math.sqrt(Math.max(0, xp) / 100)) + 1);
+  const calculated = Math.floor(Math.sqrt(Math.max(0, xp) / 100)) + 1;
+  return Math.min(50, Math.max(1, calculated));
 }
 
 export function xpForLevel(level: number): number {
-  return 100 * (level - 1) * (level - 1);
+  const cl = Math.min(50, Math.max(1, level));
+  return 100 * (cl - 1) * (cl - 1);
 }
 
-/** Progress (0..1) through the current level. */
+/** Progress (0..1) through the current level. Max level 50 stays at 1 (100%). */
 export function levelProgress(xp: number): number {
   const level = levelForXp(xp);
+  if (level >= 50) return 1;
   const floor = xpForLevel(level);
   const ceil = xpForLevel(level + 1);
   if (ceil === floor) return 1;

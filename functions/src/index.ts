@@ -1,5 +1,5 @@
 /**
- * UI Zera Platform — Cloud Functions
+ * UiZera Platform — Cloud Functions
  *
  * Responsibilities:
  *  1. onAuthUserCreated  — provision the users/ + leaderboard/ documents and

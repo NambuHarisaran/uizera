@@ -2,12 +2,14 @@ import "server-only";
 
 import { adminDb, FieldValue } from "@/lib/firebase/admin";
 import { ApiError } from "@/lib/server/api";
+import { levelForXp } from "@/lib/utils";
 import type { AppUser, CoinSource } from "@/types";
 
 interface AwardOptions {
   uid: string;
   /** Positive to award; negative only for admin adjustments. */
   amount: number;
+  xpAmount?: number;
   source: CoinSource;
   reason: string;
   refId?: string | null;
@@ -114,8 +116,10 @@ export async function awardCoins(opts: AwardOptions): Promise<AwardResult> {
     const coins = Math.max(0, (user.coins ?? 0) + amount);
     const weeklyCoins = Math.max(0, (user.weeklyCoins ?? 0) + amount);
     const monthlyCoins = Math.max(0, (user.monthlyCoins ?? 0) + amount);
-    // XP is lifetime-earned: it only ever grows, and never from deductions.
-    const xp = (user.xp ?? 0) + Math.max(0, amount);
+    // XP is lifetime-earned: it only ever grows.
+    const xpGain = opts.xpAmount !== undefined ? Math.max(0, opts.xpAmount) : Math.max(0, amount);
+    const xp = (user.xp ?? 0) + xpGain;
+    const level = levelForXp(xp);
 
     const counters = {
       quizzesTaken: (user.quizzesTaken ?? 0) + (opts.counters?.quizzesTaken ?? 0),
@@ -137,6 +141,7 @@ export async function awardCoins(opts: AwardOptions): Promise<AwardResult> {
       weeklyCoins,
       monthlyCoins,
       xp,
+      level,
       badges,
       ...counters,
     });

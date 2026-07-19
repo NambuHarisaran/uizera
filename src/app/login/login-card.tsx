@@ -33,7 +33,7 @@ export function LoginCard() {
     setBusy(true);
     try {
       await signInWithGoogle();
-      toast.success("Welcome to UI Zera!");
+      toast.success("Welcome to UiZera!");
       router.replace(next);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Sign-in failed.");

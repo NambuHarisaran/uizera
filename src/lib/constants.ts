@@ -1,8 +1,8 @@
 import type { BadgeDef } from "@/types";
 
 export const SITE = {
-  name: "UI Zera Club",
-  fullName: "UI Zera Club — UiPath Community, PSNA CET",
+  name: "UiZera Club",
+  fullName: "UiZera Club — UiPath Community, PSNA CET",
   tagline: "Empowering the Next Generation of Automation Leaders",
   description:
     "The UiPath first Tamil community at PSNA College of Engineering & Technology. Quizzes, challenges, certifications, and a launchpad for RPA careers.",
@@ -13,7 +13,6 @@ export const SITE = {
   social: {
     instagram: "https://www.instagram.com/psna_uizeraclub",
     linkedin: "https://www.linkedin.com/company/ui-zera-club-psnacet",
-    twitter: "https://x.com/psna_uizeraclub",
   },
   stats: {
     members: 100,
@@ -27,6 +26,8 @@ export const NAV_LINKS = [
   { href: "/", label: "Home" },
   { href: "/about", label: "About" },
   { href: "/events", label: "Events" },
+  { href: "/announcements", label: "Announcements" },
+  { href: "/achievements", label: "Achievements" },
   { href: "/leaderboard", label: "Leaderboard" },
   { href: "/resources", label: "Resources" },
   { href: "/team", label: "Team" },
@@ -37,6 +38,7 @@ export const APP_LINKS = [
   { href: "/quiz", label: "Quizzes", icon: "Zap" },
   { href: "/challenges", label: "Challenges", icon: "Target" },
   { href: "/certifications", label: "30-Day Certs", icon: "Award" },
+  { href: "/achievements", label: "Achievements", icon: "Award" },
   { href: "/leaderboard", label: "Leaderboard", icon: "Trophy" },
   { href: "/announcements", label: "Announcements", icon: "Megaphone" },
   { href: "/profile", label: "Profile", icon: "User" },

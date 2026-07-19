@@ -63,6 +63,7 @@ export const quizUpsertSchema = z
     endAt: z.number().int().positive(),
     durationSeconds: z.number().int().min(30).max(7200),
     coinsPerPoint: z.number().min(0).max(100),
+    xpReward: z.number().int().min(0).max(10000).optional(),
     settings: z.object({
       randomizeQuestions: z.boolean(),
       randomizeOptions: z.boolean(),
@@ -106,6 +107,7 @@ export const challengeUpsertSchema = z.object({
     .max(20)
     .default([]),
   coins: z.number().int().min(0).max(1000),
+  xp: z.number().int().min(0).max(10000).optional(),
   status: z.enum(["draft", "open", "closed"]),
   deadline: z.number().int().positive(),
 });

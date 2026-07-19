@@ -11,7 +11,7 @@ import { SectionHeading } from "@/components/shared/section-heading";
 
 const faqs = [
   {
-    q: "Who can join UI Zera Club?",
+    q: "Who can join UiZera Club?",
     a: "Any student at PSNA College of Engineering & Technology can join, regardless of department or year. All you need is a Google account and enthusiasm for automation!",
   },
   {
@@ -36,7 +36,7 @@ const faqs = [
   },
   {
     q: "Is this platform affiliated with UiPath?",
-    a: "UI Zera Club is a student-run community inspired by UiPath's mission. While we use UiPath technologies, we are an independent student community at PSNA CET.",
+    a: "UiZera Club is a student-run community inspired by UiPath's mission. While we use UiPath technologies, we are an independent student community at PSNA CET.",
   },
   {
     q: "How do I become a coordinator?",

@@ -2,7 +2,7 @@
   "name": "uizera-platform",
   "version": "1.0.0",
   "private": true,
-  "description": "UI Zera Club — UiPath First Tamil Community platform at PSNA College of Engineering & Technology",
+  "description": "UiZera Club — UiPath First Tamil Community platform at PSNA College of Engineering & Technology",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

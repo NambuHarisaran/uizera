@@ -102,6 +102,9 @@ export async function POST(
       }
 
       const coinsEarned = Math.round(score * quiz.coinsPerPoint);
+      const accuracyRatio = attempt.maxScore > 0 ? score / attempt.maxScore : 0;
+      const xpRewardTotal = quiz.xpReward ?? (quiz.totalPoints * 10 || 100);
+      const xpEarned = Math.round(accuracyRatio * xpRewardTotal);
 
       tx.update(attemptRef, {
         status: "submitted",
@@ -109,19 +112,21 @@ export async function POST(
         score,
         correctCount,
         coinsEarned,
+        xpEarned,
         displayName,
         submittedAt: FieldValue.serverTimestamp(),
       });
 
-      return { score, correctCount, coinsEarned, maxScore: attempt.maxScore };
+      return { score, correctCount, coinsEarned, xpEarned, maxScore: attempt.maxScore };
     });
 
     let newBadges: string[] = [];
-    if (graded.coinsEarned > 0) {
+    if (graded.coinsEarned > 0 || graded.xpEarned > 0) {
       try {
         const award = await awardCoins({
           uid: user.uid,
-          amount: graded.coinsEarned,
+          amount: Math.max(1, graded.coinsEarned),
+          xpAmount: graded.xpEarned,
           source: "quiz",
           reason: `Quiz: ${quiz.title}`,
           refId: body.attemptId,
@@ -135,13 +140,13 @@ export async function POST(
         newBadges = award.newBadges;
       } catch (err) {
         // Attempt stays graded; surface for admin reconciliation.
-        console.error("[quiz-submit] coin award failed:", err);
+        console.error("[quiz-submit] coin/xp award failed:", err);
         await audit({
           actorUid: "system",
           actorEmail: "system",
           action: "quiz.award_failed",
           target: user.uid,
-          details: { attemptId: body.attemptId, coins: graded.coinsEarned },
+          details: { attemptId: body.attemptId, coins: graded.coinsEarned, xp: graded.xpEarned },
         });
       }
     } else {

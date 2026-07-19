@@ -7,6 +7,7 @@ import {
   Calendar,
   Clock,
   Coins,
+  Pencil,
   Plus,
   Trash2,
   Zap,
@@ -19,7 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Spinner } from "@/components/shared/spinner";
 import { useAdminQuizzes } from "@/lib/hooks";
@@ -32,14 +33,44 @@ interface QuestionInput {
   prompt: string;
   options: string[];
   correctIndices: number[];
-  explanation?: string;
+  explanation?: string | null;
   points: number;
+}
+
+interface QuizSettings {
+  randomizeQuestions: boolean;
+  randomizeOptions: boolean;
+  showReview: boolean;
+  maxAttempts: number;
+}
+
+const DEFAULT_SETTINGS: QuizSettings = {
+  randomizeQuestions: true,
+  randomizeOptions: true,
+  showReview: true,
+  maxAttempts: 1,
+};
+
+const DEFAULT_QUESTION: QuestionInput = {
+  type: "mcq",
+  prompt: "What is UiPath Studio?",
+  options: ["IDE for Automation", "Database engine", "Web browser", "Operating System"],
+  correctIndices: [0],
+  points: 10,
+};
+
+/** Epoch millis (or Firestore timestamp) → value for <input type="datetime-local">. */
+function toLocalInput(ts: unknown): string {
+  const d = toDate(ts as never);
+  return d ? format(d, "yyyy-MM-dd'T'HH:mm") : "";
 }
 
 export default function AdminQuizzesPage() {
   const { data, isLoading, refetch } = useAdminQuizzes();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [loadingEditId, setLoadingEditId] = useState<string | null>(null);
 
   // Form state
   const [title, setTitle] = useState("");
@@ -49,17 +80,82 @@ export default function AdminQuizzesPage() {
   const [endAt, setEndAt] = useState("");
   const [durationSeconds, setDurationSeconds] = useState(600);
   const [coinsPerPoint, setCoinsPerPoint] = useState(1);
-  const [questions, setQuestions] = useState<QuestionInput[]>([
-    {
-      type: "mcq",
-      prompt: "What is UiPath Studio?",
-      options: ["IDE for Automation", "Database engine", "Web browser", "Operating System"],
-      correctIndices: [0],
-      points: 10,
-    },
-  ]);
+  const [xpReward, setXpReward] = useState(100);
+  const [maxAttempts, setMaxAttempts] = useState(1);
+  const [settings, setSettings] = useState<QuizSettings>(DEFAULT_SETTINGS);
+  const [questions, setQuestions] = useState<QuestionInput[]>([DEFAULT_QUESTION]);
 
   const quizzes = data?.quizzes ?? [];
+
+  const resetForm = () => {
+    setTitle("");
+    setDescription("");
+    setStatus("draft");
+    setStartAt("");
+    setEndAt("");
+    setDurationSeconds(600);
+    setCoinsPerPoint(1);
+    setXpReward(100);
+    setMaxAttempts(1);
+    setSettings(DEFAULT_SETTINGS);
+    setQuestions([{ ...DEFAULT_QUESTION }]);
+  };
+
+  const openCreate = () => {
+    setEditingId(null);
+    resetForm();
+    setOpen(true);
+  };
+
+  const openEdit = async (quiz: Quiz) => {
+    setLoadingEditId(quiz.id);
+    try {
+      const res = await fetch(`/api/admin/quizzes/${quiz.id}`);
+      const body = await res.json().catch(() => null);
+      if (!res.ok || !body?.ok) {
+        throw new Error(body?.error ?? "Failed to load quiz.");
+      }
+
+      const q = body.data.quiz;
+      const qs = body.data.questions as Array<{
+        id: string;
+        type: QuestionType;
+        prompt: string;
+        options: string[];
+        correctIndices: number[];
+        explanation: string | null;
+        points: number;
+      }>;
+
+      setEditingId(quiz.id);
+      setTitle(q.title ?? "");
+      setDescription(q.description ?? "");
+      setStatus(q.status ?? "draft");
+      setStartAt(toLocalInput(q.startAt));
+      setEndAt(toLocalInput(q.endAt));
+      setDurationSeconds(q.durationSeconds ?? 600);
+      setCoinsPerPoint(q.coinsPerPoint ?? 1);
+      setXpReward(q.xpReward ?? 100);
+      setMaxAttempts(q.settings?.maxAttempts ?? 1);
+      setSettings({ ...DEFAULT_SETTINGS, ...(q.settings ?? {}) });
+      setQuestions(
+        qs.map((item) => ({
+          id: item.id,
+          type: item.type,
+          prompt: item.prompt,
+          options: item.options,
+          correctIndices: item.correctIndices,
+          explanation: item.explanation,
+          points: item.points,
+        }))
+      );
+      setOpen(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error loading quiz.");
+    } finally {
+      setLoadingEditId(null);
+    }
+  };
 
   const handleAddQuestion = () => {
     setQuestions((prev) => [
@@ -96,7 +192,7 @@ export default function AdminQuizzesPage() {
     });
   };
 
-  const handleCreateQuiz = async () => {
+  const handleSaveQuiz = async () => {
     if (!title || !startAt || !endAt || questions.length === 0) {
       toast.error("Please fill in all required quiz fields and at least 1 question.");
       return;
@@ -112,31 +208,31 @@ export default function AdminQuizzesPage() {
         endAt: new Date(endAt).getTime(),
         durationSeconds: Number(durationSeconds),
         coinsPerPoint: Number(coinsPerPoint),
-        settings: {
-          randomizeQuestions: true,
-          randomizeOptions: true,
-          showReview: true,
-          maxAttempts: 1,
-        },
+        xpReward: Number(xpReward),
+        settings: { ...settings, maxAttempts: Number(maxAttempts) },
         questions,
       };
 
-      const res = await fetch("/api/admin/quizzes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      const res = await fetch(
+        editingId ? `/api/admin/quizzes/${editingId}` : "/api/admin/quizzes",
+        {
+          method: editingId ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }
+      );
 
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        throw new Error(err?.error ?? "Failed to create quiz.");
+        throw new Error(err?.error ?? "Failed to save quiz.");
       }
 
-      toast.success("Quiz created successfully!");
+      toast.success(editingId ? "Quiz updated successfully!" : "Quiz created successfully!");
       setOpen(false);
+      setEditingId(null);
       refetch();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error creating quiz.");
+      toast.error(err instanceof Error ? err.message : "Error saving quiz.");
     } finally {
       setSaving(false);
     }
@@ -166,15 +262,14 @@ export default function AdminQuizzesPage() {
           </p>
         </div>
 
+        <Button className="gap-2" onClick={openCreate}>
+          <Plus className="h-4 w-4" /> Create Quiz
+        </Button>
+
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" /> Create Quiz
-            </Button>
-          </DialogTrigger>
           <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Create New Quiz</DialogTitle>
+              <DialogTitle>{editingId ? "Edit Quiz" : "Create New Quiz"}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-2">
               <div>
@@ -238,6 +333,39 @@ export default function AdminQuizzesPage() {
                     onChange={(e) => setEndAt(e.target.value)}
                   />
                 </div>
+
+                <div>
+                  <Label>Coins per Point</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={coinsPerPoint}
+                    onChange={(e) => setCoinsPerPoint(Number(e.target.value))}
+                  />
+                </div>
+
+                <div>
+                  <Label>XP Reward (Max XP for 100%)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={10000}
+                    value={xpReward}
+                    onChange={(e) => setXpReward(Number(e.target.value))}
+                  />
+                </div>
+
+                <div>
+                  <Label>Max Attempts</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={5}
+                    value={maxAttempts}
+                    onChange={(e) => setMaxAttempts(Number(e.target.value))}
+                  />
+                </div>
               </div>
 
               {/* Question builder */}
@@ -253,17 +381,32 @@ export default function AdminQuizzesPage() {
                   <div key={qIdx} className="space-y-3 rounded-lg border p-4 bg-muted/30">
                     <div className="flex items-center justify-between">
                       <span className="font-semibold text-sm">Question #{qIdx + 1}</span>
-                      {questions.length > 1 && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveQuestion(qIdx)}
-                          className="text-destructive hover:bg-destructive/10"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <Label className="text-xs text-muted-foreground">Points</Label>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={100}
+                            value={q.points}
+                            onChange={(e) =>
+                              handleQuestionChange(qIdx, "points", Number(e.target.value))
+                            }
+                            className="h-8 w-16 text-xs"
+                          />
+                        </div>
+                        {questions.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveQuestion(qIdx)}
+                            className="text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
 
                     <div>
@@ -296,9 +439,9 @@ export default function AdminQuizzesPage() {
                 ))}
               </div>
 
-              <Button onClick={handleCreateQuiz} disabled={saving} className="w-full gap-2">
+              <Button onClick={handleSaveQuiz} disabled={saving} className="w-full gap-2">
                 {saving ? <Spinner className="text-white" /> : <Zap className="h-4 w-4" />}
-                Save Quiz
+                {editingId ? "Save Changes" : "Save Quiz"}
               </Button>
             </div>
           </DialogContent>
@@ -354,6 +497,18 @@ export default function AdminQuizzesPage() {
                         </TableCell>
 
                         <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={loadingEditId === q.id}
+                            onClick={() => openEdit(q)}
+                          >
+                            {loadingEditId === q.id ? (
+                              <Spinner className="h-4 w-4" />
+                            ) : (
+                              <Pencil className="h-4 w-4" />
+                            )}
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"

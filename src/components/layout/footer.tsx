@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bot, Instagram, Linkedin, Mail, MapPin, Twitter } from "lucide-react";
+import { Bot, Instagram, Linkedin, Mail, MapPin } from "lucide-react";
 import { SITE } from "@/lib/constants";
 
 const footerLinks = {
@@ -57,15 +57,6 @@ export function Footer() {
                 className="rounded-lg border p-2 text-muted-foreground transition-colors hover:border-brand-500/50 hover:text-brand-500"
               >
                 <Linkedin className="h-4 w-4" />
-              </a>
-              <a
-                href={SITE.social.twitter}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="X (Twitter)"
-                className="rounded-lg border p-2 text-muted-foreground transition-colors hover:border-brand-500/50 hover:text-brand-500"
-              >
-                <Twitter className="h-4 w-4" />
               </a>
             </div>
           </div>

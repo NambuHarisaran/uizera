@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bot, Coins, LayoutDashboard, LogOut, Menu, User, X } from "lucide-react";
+import { Bot, ChevronDown, Coins, Crown, LayoutDashboard, LogOut, Menu, User, X } from "lucide-react";
 import { useAuth } from "@/components/providers/auth-provider";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -65,18 +65,85 @@ export function Navbar() {
         </Link>
 
         <div className="hidden items-center gap-1 lg:flex">
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={cn(
-                "rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground",
-                pathname === link.href && "text-foreground"
-              )}
-            >
-              {link.label}
-            </Link>
-          ))}
+          <Link
+            href="/"
+            className={cn(
+              "rounded-lg px-3.5 py-2 text-sm font-semibold transition-colors hover:text-foreground",
+              pathname === "/" ? "text-foreground bg-accent/60" : "text-muted-foreground"
+            )}
+          >
+            Home
+          </Link>
+
+          {/* Community Submenu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger className={cn(
+              "flex items-center gap-1 rounded-lg px-3.5 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground outline-none",
+              ["/about", "/team", "/announcements", "/events", "/contact"].includes(pathname) && "text-foreground bg-accent/60"
+            )}>
+              Community <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48">
+              <DropdownMenuItem asChild>
+                <Link href="/about">About UiZera</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/team">Team & Leadership</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/announcements">Announcements</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/events">Events & Workshops</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/contact">Contact Us</Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Activities & Ranks Submenu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger className={cn(
+              "flex items-center gap-1 rounded-lg px-3.5 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground outline-none",
+              ["/quiz", "/challenges", "/certifications", "/achievements", "/champions", "/leaderboard", "/resources"].includes(pathname) && "text-foreground bg-accent/60"
+            )}>
+              Activities & Ranks <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuItem asChild>
+                <Link href="/quiz" className="flex items-center justify-between">
+                  <span>Quizzes</span>
+                  <span className="text-[10px] bg-uipath-orange/15 text-uipath-orange font-bold px-1.5 py-0.5 rounded">PLAY</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/challenges" className="flex items-center justify-between">
+                  <span>Weekly Challenges</span>
+                  <span className="text-[10px] bg-brand-500/15 text-brand-500 font-bold px-1.5 py-0.5 rounded">NEW</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/certifications">30-Day Certifications</Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/achievements">Achievements & Level</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/champions" className="flex items-center justify-between font-bold text-amber-500">
+                  <span>Champions Selection</span>
+                  <Crown className="h-3.5 w-3.5 text-amber-500" />
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/leaderboard">Leaderboard</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/resources">Learning Resources</Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <div className="flex items-center gap-2">
@@ -169,51 +236,100 @@ export function Navbar() {
                 </div>
               )}
 
-              {NAV_LINKS.map((link) => (
+              <div className="space-y-3 max-h-[75vh] overflow-y-auto pr-1">
                 <Link
-                  key={link.href}
-                  href={link.href}
+                  href="/"
                   className={cn(
-                    "rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-                    pathname === link.href && "bg-accent text-foreground font-bold"
+                    "block rounded-lg px-3 py-2 text-sm font-bold transition-colors hover:bg-accent",
+                    pathname === "/" ? "bg-accent text-foreground" : "text-muted-foreground"
                   )}
                 >
-                  {link.label}
+                  Home
                 </Link>
-              ))}
 
-              {user && (
-                <div className="mt-2 pt-2 border-t space-y-1">
+                <div className="space-y-1">
+                  <p className="px-3 text-[11px] font-mono font-bold uppercase tracking-wider text-muted-foreground/70">
+                    Community
+                  </p>
+                  {[
+                    { href: "/about", label: "About UiZera" },
+                    { href: "/team", label: "Team & Leadership" },
+                    { href: "/announcements", label: "Announcements" },
+                    { href: "/events", label: "Events & Workshops" },
+                    { href: "/contact", label: "Contact Us" },
+                  ].map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        "block rounded-lg px-3 py-1.5 text-sm font-medium transition-colors hover:bg-accent hover:text-foreground",
+                        pathname === item.href ? "bg-accent font-bold text-foreground" : "text-muted-foreground"
+                      )}
+                    >
+                      {item.label}
+                    </Link>
+                  ))}
+                </div>
+
+                <div className="space-y-1 pt-1 border-t">
+                  <p className="px-3 text-[11px] font-mono font-bold uppercase tracking-wider text-muted-foreground/70">
+                    Activities & Ranks
+                  </p>
                   <Link
                     href="/quiz"
-                    className="flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+                    className="flex items-center justify-between rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
                   >
                     <span>Quizzes</span>
-                    <span className="text-xs bg-uipath-orange/10 text-uipath-orange px-2 py-0.5 rounded-full font-bold">Play</span>
+                    <span className="text-[10px] bg-uipath-orange/15 text-uipath-orange font-bold px-1.5 py-0.5 rounded">PLAY</span>
                   </Link>
                   <Link
                     href="/challenges"
-                    className="flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+                    className="flex items-center justify-between rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
                   >
                     <span>Weekly Challenges</span>
-                    <span className="text-xs bg-brand-500/10 text-brand-500 px-2 py-0.5 rounded-full font-bold">New</span>
+                    <span className="text-[10px] bg-brand-500/15 text-brand-500 font-bold px-1.5 py-0.5 rounded">NEW</span>
                   </Link>
                   <Link
                     href="/certifications"
-                    className="flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+                    className="block rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
                   >
-                    <span>30-Day Certifications</span>
+                    30-Day Certifications
+                  </Link>
+                  <Link
+                    href="/achievements"
+                    className="block rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+                  >
+                    Achievements & Level
+                  </Link>
+                  <Link
+                    href="/champions"
+                    className="flex items-center justify-between rounded-lg px-3 py-1.5 text-sm font-bold text-amber-500 hover:bg-accent"
+                  >
+                    <span>Champions Selection</span>
+                    <Crown className="h-3.5 w-3.5 text-amber-500" />
+                  </Link>
+                  <Link
+                    href="/leaderboard"
+                    className="block rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+                  >
+                    Leaderboard
+                  </Link>
+                  <Link
+                    href="/resources"
+                    className="block rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+                  >
+                    Learning Resources
                   </Link>
                   {isAdmin && (
                     <Link
                       href="/admin"
-                      className="flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-bold text-uipath-orange hover:bg-accent"
+                      className="block rounded-lg px-3 py-1.5 text-sm font-bold text-uipath-orange hover:bg-accent mt-1"
                     >
-                      <span>Admin Dashboard</span>
+                      Admin Dashboard
                     </Link>
                   )}
                 </div>
-              )}
+              </div>
 
               {!firebaseUser && !loading && (
                 <Button onClick={handleSignIn} className="mt-3 w-full font-bold">

@@ -59,16 +59,16 @@ function TopThreeCards({ entries, period }: { entries: LeaderboardEntry[]; perio
             <p className={`mt-2 font-display font-semibold ${isFirst ? "text-base" : "text-sm"}`}>
               {entry.displayName}
             </p>
+            <Badge variant="outline" className={`mt-1 text-[10px] uppercase font-bold tracking-wider ${rankStyleForLevel(levelForXp(entry.xp)).badgeClass}`}>
+              {rankStyleForLevel(levelForXp(entry.xp)).title} · Lv. {levelForXp(entry.xp)}
+            </Badge>
             {entry.department && (
-              <p className="text-xs text-muted-foreground">{entry.department}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{entry.department}</p>
             )}
             <div className="mt-1.5 flex items-center gap-1 text-sm font-bold text-amber-500">
               <Coins className="h-3.5 w-3.5" />
               {formatCoins(entry[coinField[period]] as number)}
             </div>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Level {levelForXp(entry.xp)}
-            </p>
           </motion.div>
         );
       })}
@@ -89,7 +89,7 @@ function LeaderboardTable({ entries, period }: { entries: LeaderboardEntry[]; pe
               <th className="px-4 py-3 text-left font-medium">#</th>
               <th className="px-4 py-3 text-left font-medium">Member</th>
               <th className="px-4 py-3 text-left font-medium hidden sm:table-cell">Dept</th>
-              <th className="px-4 py-3 text-left font-medium hidden md:table-cell">Level</th>
+              <th className="px-4 py-3 text-left font-medium hidden md:table-cell">Level & Rank</th>
               <th className="px-4 py-3 text-left font-medium hidden md:table-cell">Badges</th>
               <th className="px-4 py-3 text-right font-medium">Coins</th>
             </tr>
@@ -107,11 +107,16 @@ function LeaderboardTable({ entries, period }: { entries: LeaderboardEntry[]; pe
                 <td className="px-4 py-3 font-medium text-muted-foreground">{i + 4}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
-                    <Avatar className="h-8 w-8">
+                    <Avatar className="h-9 w-9 border">
                       <AvatarImage src={entry.photoURL ?? undefined} />
                       <AvatarFallback className="text-xs">{initials(entry.displayName)}</AvatarFallback>
                     </Avatar>
-                    <span className="font-medium">{entry.displayName}</span>
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-foreground">{entry.displayName}</span>
+                      <span className={`mt-0.5 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${rankStyleForLevel(levelForXp(entry.xp)).badgeClass}`}>
+                        {rankStyleForLevel(levelForXp(entry.xp)).title} · Lv.{levelForXp(entry.xp)}
+                      </span>
+                    </div>
                   </div>
                 </td>
                 <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">

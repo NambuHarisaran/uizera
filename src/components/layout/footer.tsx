@@ -31,7 +31,7 @@ export function Footer() {
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-5">
           <div className="lg:col-span-2">
             <Link href="/" className="flex items-center gap-2.5 font-display text-lg font-bold">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-amber-500 text-white">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-uipath-orange text-white">
                 <Bot className="h-5 w-5" />
               </span>
               UI <span className="text-gradient">Zera</span> Club

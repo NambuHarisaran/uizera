@@ -19,6 +19,7 @@ const config: Config = {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          hover: "hsl(var(--primary-hover))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -44,63 +45,55 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Exact custom brand tokens
+        uipath: {
+          orange: "#FA4616",
+          hover: "#E53E12",
+          blue: "#0067DF",
+          gold: "#FFB40E",
+          success: "#34DE69",
+          bg: "#F1F6F8",
+          text: "#000000",
+          mutedText: "#58595B",
+        },
         brand: {
           50: "#fff5f2",
           100: "#ffe8e1",
           200: "#ffd0c2",
           300: "#ffab92",
           400: "#ff7a54",
-          500: "#fa4616",
-          600: "#e8380c",
+          500: "#FA4616", // Primary
+          600: "#E53E12", // Hover
           700: "#c22a08",
           800: "#9c250e",
           900: "#7e2310",
-          950: "#440e04",
+        },
+        gold: {
+          DEFAULT: "hsl(var(--gold))",
+          500: "#FFB40E",
+        },
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          500: "#34DE69",
         },
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        "2xl": "1.25rem",
+        "3xl": "1.75rem",
       },
       fontFamily: {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
         display: ["var(--font-display)", "var(--font-sans)", "sans-serif"],
         mono: ["var(--font-mono)", "monospace"],
       },
-      keyframes: {
-        "accordion-down": {
-          from: { height: "0" },
-          to: { height: "var(--radix-accordion-content-height)" },
-        },
-        "accordion-up": {
-          from: { height: "var(--radix-accordion-content-height)" },
-          to: { height: "0" },
-        },
-        marquee: {
-          from: { transform: "translateX(0)" },
-          to: { transform: "translateX(-50%)" },
-        },
-        float: {
-          "0%, 100%": { transform: "translateY(0)" },
-          "50%": { transform: "translateY(-12px)" },
-        },
-        "pulse-glow": {
-          "0%, 100%": { opacity: "0.6" },
-          "50%": { opacity: "1" },
-        },
-        shimmer: {
-          from: { backgroundPosition: "200% 0" },
-          to: { backgroundPosition: "-200% 0" },
-        },
-      },
-      animation: {
-        "accordion-down": "accordion-down 0.2s ease-out",
-        "accordion-up": "accordion-up 0.2s ease-out",
-        marquee: "marquee 40s linear infinite",
-        float: "float 6s ease-in-out infinite",
-        "pulse-glow": "pulse-glow 4s ease-in-out infinite",
-        shimmer: "shimmer 8s linear infinite",
+      boxShadow: {
+        card: "0 10px 30px -10px rgba(0, 103, 223, 0.08)",
+        "card-hover": "0 20px 40px -15px rgba(250, 70, 22, 0.15)",
+        primary: "0 8px 24px -6px rgba(250, 70, 22, 0.4)",
+        secondary: "0 8px 24px -6px rgba(0, 103, 223, 0.35)",
       },
     },
   },

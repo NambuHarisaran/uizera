@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 export default function NotFound() {
   return (
     <main className="hero-glow flex min-h-dvh flex-col items-center justify-center px-4 text-center">
-      <span className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-amber-500 text-white shadow-xl shadow-brand-500/30">
+      <span className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-uipath-orange text-white shadow-xl shadow-brand-500/30">
         <Bot className="h-8 w-8" />
       </span>
       <h1 className="font-display text-6xl font-bold text-gradient">404</h1>

@@ -56,7 +56,7 @@ export function LoginCard() {
       </Link>
 
       <div className="mb-8 flex flex-col items-center text-center">
-        <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-amber-500 text-white shadow-xl shadow-brand-500/30">
+        <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-uipath-orange text-white shadow-xl shadow-brand-500/30">
           <Bot className="h-7 w-7" />
         </span>
         <h1 className="font-display text-2xl font-bold">

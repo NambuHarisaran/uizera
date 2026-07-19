@@ -22,6 +22,11 @@ async function request<T>(
   }
 }
 
+export async function fetcher<T>(url: string): Promise<T> {
+  const res = await request<T>(url);
+  return unwrap(res);
+}
+
 export function getJson<T>(url: string): Promise<ApiResult<T>> {
   return request<T>(url);
 }

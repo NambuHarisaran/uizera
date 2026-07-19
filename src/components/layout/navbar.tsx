@@ -23,7 +23,7 @@ import { toast } from "sonner";
 
 export function Navbar() {
   const pathname = usePathname();
-  const { user, loading, isAdmin, signInWithGoogle, signOut } = useAuth();
+  const { user, firebaseUser, loading, isAdmin, signInWithGoogle, signOut } = useAuth();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -56,7 +56,7 @@ export function Navbar() {
     >
       <nav className="container flex h-16 items-center justify-between gap-4">
         <Link href="/" className="flex items-center gap-2.5 font-display text-lg font-bold">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-amber-500 text-white shadow-lg shadow-brand-500/30">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-uipath-orange text-white shadow-lg shadow-brand-500/30 transition-transform duration-300 hover:rotate-6">
             <Bot className="h-5 w-5" />
           </span>
           <span>
@@ -82,8 +82,8 @@ export function Navbar() {
         <div className="flex items-center gap-2">
           <ThemeToggle />
 
-          {!loading && !user && (
-            <Button onClick={handleSignIn} size="sm" className="hidden sm:inline-flex">
+          {!loading && !firebaseUser && (
+            <Button onClick={handleSignIn} size="sm" className="btn-primary hidden rounded-xl px-5 font-bold shadow-md sm:inline-flex">
               Join with Google
             </Button>
           )}
@@ -186,7 +186,7 @@ export function Navbar() {
                   </Link>
                 </>
               )}
-              {!user && !loading && (
+              {!firebaseUser && !loading && (
                 <Button onClick={handleSignIn} className="mt-2">
                   Join with Google
                 </Button>

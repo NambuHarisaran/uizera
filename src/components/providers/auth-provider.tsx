@@ -32,6 +32,37 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/**
+ * Minimal profile derived from the Firebase auth user. Used when the
+ * Firestore user document is not yet created (first-login race) or cannot
+ * be read, so a signed-in user is never presented as logged-out.
+ */
+function fallbackProfile(fb: FirebaseUser): AppUser {
+  return {
+    uid: fb.uid,
+    email: fb.email ?? "",
+    displayName: fb.displayName ?? fb.email?.split("@")[0] ?? "Member",
+    photoURL: fb.photoURL,
+    role: "student",
+    department: null,
+    year: null,
+    regNo: null,
+    bio: null,
+    coins: 0,
+    weeklyCoins: 0,
+    monthlyCoins: 0,
+    xp: 0,
+    level: 1,
+    badges: [],
+    quizzesTaken: 0,
+    challengesApproved: 0,
+    certsCompleted: 0,
+    disabled: false,
+    createdAt: null,
+    lastLoginAt: null,
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
@@ -50,16 +81,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!firebaseUser) return;
+    let cancelled = false;
+
+    // Authoritative fallback: the server reads the profile with the Admin SDK
+    // (correct role included) when the client SDK cannot read the users doc.
+    const hydrateFromServer = async () => {
+      try {
+        const res = await fetch("/api/profile");
+        const body = (await res.json().catch(() => null)) as
+          | { ok: boolean; data?: { user?: AppUser } }
+          | null;
+        if (!cancelled && body?.ok && body.data?.user) {
+          setUser(body.data.user);
+          setLoading(false);
+          return;
+        }
+      } catch {
+        // fall through to the minimal client-side profile
+      }
+      if (!cancelled) {
+        setUser(fallbackProfile(firebaseUser));
+        setLoading(false);
+      }
+    };
+
     const ref = doc(clientDb(), "users", firebaseUser.uid);
     const unsub = onSnapshot(
       ref,
       (snap) => {
-        setUser(snap.exists() ? ({ ...(snap.data() as AppUser), uid: snap.id }) : null);
-        setLoading(false);
+        if (snap.exists()) {
+          setUser({ ...(snap.data() as AppUser), uid: snap.id });
+          setLoading(false);
+        } else {
+          void hydrateFromServer();
+        }
       },
-      () => setLoading(false)
+      () => void hydrateFromServer()
     );
-    return unsub;
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, [firebaseUser]);
 
   const signInWithGoogle = useCallback(async () => {

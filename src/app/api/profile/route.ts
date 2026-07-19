@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import {
+  ApiError,
   assertSameOrigin,
   handleApi,
   jsonOk,
@@ -9,8 +10,22 @@ import {
 } from "@/lib/server/api";
 import { rateLimit } from "@/lib/server/rate-limit";
 import { profileUpdateSchema } from "@/lib/validation";
+import { getAppUser } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
+
+/**
+ * GET /api/profile — the caller's own full profile, read server-side with the
+ * Admin SDK. Serves as the authoritative fallback when the client SDK cannot
+ * read the users doc directly (e.g. security rules not yet deployed).
+ */
+export async function GET() {
+  return handleApi(async () => {
+    const user = await getAppUser();
+    if (!user) throw new ApiError(401, "Sign in required.");
+    return jsonOk({ user });
+  });
+}
 
 /**
  * POST /api/profile — update the caller's own profile.

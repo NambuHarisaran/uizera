@@ -4,11 +4,22 @@ import { adminDb, FieldValue, Timestamp } from "@/lib/firebase/admin";
 import { ApiError } from "@/lib/server/api";
 import { shuffle, toMillis } from "@/lib/utils";
 import type { QuizUpsertInput } from "@/lib/validation";
-import type { Quiz, QuizQuestionPublic } from "@/types";
+import type { Quiz, QuizQuestionPublic, QuizStatus } from "@/types";
 
 /** Split validated quiz input into the public docs + private answer key. */
-export function buildQuizDocs(input: QuizUpsertInput) {
-  const questions = input.questions.map((q, i) => {
+export function buildQuizDocs(input: {
+  title: string;
+  description?: string | null;
+  coverImage?: string | null;
+  status: QuizStatus;
+  startAt: number;
+  endAt: number;
+  durationSeconds: number;
+  coinsPerPoint: number;
+  settings: any;
+  questions: any[];
+}) {
+  const questions = input.questions.map((q: any, i: number) => {
     const id = q.id ?? `q${String(i + 1).padStart(2, "0")}`;
     return {
       id,
@@ -28,11 +39,11 @@ export function buildQuizDocs(input: QuizUpsertInput) {
     };
   });
 
-  const totalPoints = input.questions.reduce((s, q) => s + q.points, 0);
+  const totalPoints = input.questions.reduce((s: number, q: any) => s + (q.points ?? 0), 0);
 
   const quizDoc = {
     title: input.title,
-    description: input.description,
+    description: input.description ?? "",
     coverImage: input.coverImage ?? null,
     status: input.status,
     startAt: Timestamp.fromMillis(input.startAt),

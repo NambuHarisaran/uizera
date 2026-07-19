@@ -35,6 +35,7 @@ firestore-debug.log
 ui-debug.log
 serviceAccountKey.json
 *-service-account*.json
+*firebase-adminsdk*.json
 
 # typescript
 *.tsbuildinfo

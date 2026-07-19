@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { NAV_LINKS, SITE } from "@/lib/constants";
-import { cn, formatCoins, initials } from "@/lib/utils";
+import { cn, formatCoins, initials, rankStyleForLevel } from "@/lib/utils";
 import { toast } from "sonner";
 
 export function Navbar() {
@@ -105,7 +105,7 @@ export function Navbar() {
                   <DropdownMenuLabel className="flex flex-col">
                     <span>{user.displayName}</span>
                     <span className="text-xs font-normal text-muted-foreground">
-                      Level {user.level} · {formatCoins(user.coins)} coins
+                      Level {user.level} · <span className="font-semibold text-foreground">{rankStyleForLevel(user.level).title}</span>
                     </span>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
@@ -161,7 +161,7 @@ export function Navbar() {
                 <div className="mb-2 rounded-xl border bg-card/60 p-3 text-xs flex items-center justify-between">
                   <div>
                     <p className="font-bold text-foreground">{user.displayName}</p>
-                    <p className="text-muted-foreground">Level {user.level} (Max 50) · {formatCoins(user.xp)} XP</p>
+                    <p className="text-muted-foreground">Level {user.level} ({rankStyleForLevel(user.level).title}) · {formatCoins(user.xp)} XP</p>
                   </div>
                   <div className="flex items-center gap-1 font-bold text-amber-500">
                     <Coins className="h-4 w-4" /> {formatCoins(user.coins)}

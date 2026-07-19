@@ -59,6 +59,12 @@ service cloud.firestore {
       }
     }
 
+    // ── Live Quiz Sessions: synchronized stage sessions. ──
+    match /liveQuizSessions/{quizId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
     // ── Quiz attempts: owner and admins can read; graded server-side only. ──
     match /quizAttempts/{attemptId} {
       allow read: if isAdmin()

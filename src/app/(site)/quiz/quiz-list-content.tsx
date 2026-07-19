@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
-import { Calendar, Clock, Coins, HelpCircle, Trophy, Zap } from "lucide-react";
+import { Calendar, Clock, Coins, HelpCircle, Radio, Trophy, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/shared/spinner";
@@ -79,17 +79,20 @@ function QuizCard({ quiz }: { quiz: Quiz }) {
         </div>
 
         {isPlayable && (
-          <Button asChild className="mt-5 gap-2">
-            <Link href={`/quiz/${quiz.id}`}>
-              {quiz.status === "live" ? (
-                <>
-                  <Zap className="h-4 w-4" /> Take Quiz
-                </>
-              ) : (
-                "View Details"
-              )}
-            </Link>
-          </Button>
+          <div className="mt-5 flex flex-col gap-2">
+            <Button asChild className="gap-2 bg-brand-500 hover:bg-brand-600">
+              <Link href={`/quiz/${quiz.id}`}>
+                <Zap className="h-4 w-4" /> Take Standard Quiz
+              </Link>
+            </Button>
+            {quiz.status === "live" && (
+              <Button asChild variant="outline" className="gap-2 border-uipath-orange text-uipath-orange hover:bg-uipath-orange/10 font-bold">
+                <Link href={`/quiz/${quiz.id}/live`}>
+                  <Radio className="h-4 w-4 animate-pulse text-uipath-orange" /> Join Live Stage Quiz
+                </Link>
+              </Button>
+            )}
+          </div>
         )}
         {quiz.status === "closed" && (
           <Button asChild variant="outline" className="mt-5 gap-2">

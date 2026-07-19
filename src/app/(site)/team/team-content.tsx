@@ -20,13 +20,13 @@ const sectionOrder: { key: TeamSection; label: string }[] = [
 
 /** Display order for role categories inside the core team. Unknown roles go last. */
 const ROLE_ORDER = [
-  "Event Manager",
   "Technical Team",
   "Cinematography",
   "Social Media",
   "Content Creator",
   "PRO",
   "Graphical Designer",
+  "Event Manager",
 ];
 
 function groupByRole(members: TeamMember[]): [string, TeamMember[]][] {
@@ -178,11 +178,10 @@ export function TeamContent() {
                           <span className="h-px flex-1 bg-border" />
                         </div>
                         <div
-                          className={`grid gap-6 ${
-                            roleMembers.length <= 2
+                          className={`grid gap-6 ${roleMembers.length <= 2
                               ? "sm:grid-cols-2 lg:grid-cols-3"
                               : "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-                          }`}
+                            }`}
                         >
                           {roleMembers.map((m) => (
                             <MemberCard key={m.id} member={m} />
@@ -199,13 +198,12 @@ export function TeamContent() {
               <section key={key}>
                 <SectionHeading title={label} />
                 <div
-                  className={`mt-10 grid gap-6 ${
-                    key === "sdc"
+                  className={`mt-10 grid gap-6 ${key === "sdc"
                       ? "mx-auto max-w-sm"
                       : members.length <= 2
                         ? "mx-auto max-w-xl sm:grid-cols-2"
                         : "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-                  }`}
+                    }`}
                 >
                   {members.map((m) => (
                     <MemberCard key={m.id} member={m} highlight={key === "sdc"} />

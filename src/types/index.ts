@@ -78,6 +78,7 @@ export interface Quiz {
   description: string;
   coverImage: string | null;
   status: QuizStatus;
+  mode?: "async" | "live";
   startAt: FireTimestamp;
   endAt: FireTimestamp;
   durationSeconds: number;
@@ -88,6 +89,18 @@ export interface Quiz {
   settings: QuizSettings;
   createdBy: string;
   createdAt: FireTimestamp;
+  updatedAt: FireTimestamp;
+}
+
+export interface LiveQuizSession {
+  quizId: string;
+  quizTitle: string;
+  status: "waiting" | "active" | "ended";
+  currentQuestionIndex: number;
+  questionStartAtMs: number;
+  questionDurationSeconds: number;
+  revealAnswer: boolean;
+  participantCount?: number;
   updatedAt: FireTimestamp;
 }
 

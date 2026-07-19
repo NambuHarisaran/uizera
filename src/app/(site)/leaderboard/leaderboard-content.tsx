@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Spinner } from "@/components/shared/spinner";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useLeaderboard } from "@/lib/hooks";
-import { formatCoins, initials, levelForXp } from "@/lib/utils";
+import { formatCoins, initials, levelForXp, rankStyleForLevel } from "@/lib/utils";
 import { BADGE_MAP } from "@/lib/constants";
 import type { LeaderboardEntry, LeaderboardPeriod } from "@/types";
 
@@ -118,9 +118,14 @@ function LeaderboardTable({ entries, period }: { entries: LeaderboardEntry[]; pe
                   {entry.department ?? "—"}
                 </td>
                 <td className="px-4 py-3 hidden md:table-cell">
-                  <Badge variant="outline" className="text-xs">
-                    Lv. {levelForXp(entry.xp)}
-                  </Badge>
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant="outline" className="text-xs">
+                      Lv. {levelForXp(entry.xp)}
+                    </Badge>
+                    <Badge variant="outline" className={`text-[10px] uppercase ${rankStyleForLevel(levelForXp(entry.xp)).badgeClass}`}>
+                      {rankStyleForLevel(levelForXp(entry.xp)).title}
+                    </Badge>
+                  </div>
                 </td>
                 <td className="px-4 py-3 hidden md:table-cell">
                   <div className="flex gap-1">

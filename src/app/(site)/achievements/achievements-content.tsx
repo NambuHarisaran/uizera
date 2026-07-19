@@ -29,7 +29,7 @@ import { Spinner } from "@/components/shared/spinner";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useAchievements, useClaimQuest } from "@/lib/hooks";
 import { BADGES } from "@/lib/constants";
-import { formatCoins } from "@/lib/utils";
+import { formatCoins, rankStyleForLevel } from "@/lib/utils";
 import type { Quest } from "@/types";
 
 const ICON_MAP: Record<string, any> = {
@@ -125,8 +125,8 @@ export function AchievementsContent() {
                           <h2 className="font-display text-2xl font-bold">
                             Level {level}
                           </h2>
-                          <Badge variant="outline" className="text-xs bg-brand-500/10 text-brand-500 border-brand-500/30">
-                            Max Level 50
+                          <Badge variant="outline" className={`text-xs uppercase tracking-wider ${rankStyleForLevel(level).badgeClass}`}>
+                            {rankStyleForLevel(level).title}
                           </Badge>
                         </div>
                         <p className="text-xs text-muted-foreground">

@@ -9,6 +9,7 @@ import {
   Coins,
   Pencil,
   Plus,
+  Radio,
   Trash2,
   Zap,
 } from "lucide-react";
@@ -65,7 +66,10 @@ function toLocalInput(ts: unknown): string {
   return d ? format(d, "yyyy-MM-dd'T'HH:mm") : "";
 }
 
+import { useRouter } from "next/navigation";
+
 export default function AdminQuizzesPage() {
+  const router = useRouter();
   const { data, isLoading, refetch } = useAdminQuizzes();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -497,6 +501,15 @@ export default function AdminQuizzesPage() {
                         </TableCell>
 
                         <TableCell className="text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => router.push(`/admin/live-quiz/${q.id}`)}
+                            className="gap-1 border-uipath-orange/40 text-uipath-orange hover:bg-uipath-orange/10 mr-1"
+                            title="Open Instructor Live Stage Console"
+                          >
+                            <Radio className="h-3.5 w-3.5 animate-pulse" /> Live Stage
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"

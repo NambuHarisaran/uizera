@@ -56,6 +56,48 @@ export function levelProgress(xp: number): number {
   return Math.min(1, Math.max(0, (xp - floor) / (ceil - floor)));
 }
 
+export type RankTitle = "Rookie" | "Coder" | "Expert" | "Master" | "Champion";
+
+export function rankTitleForLevel(level: number): RankTitle {
+  if (level >= 40) return "Champion";
+  if (level >= 30) return "Master";
+  if (level >= 20) return "Expert";
+  if (level >= 10) return "Coder";
+  return "Rookie";
+}
+
+export function rankStyleForLevel(level: number): { title: RankTitle; badgeClass: string } {
+  const title = rankTitleForLevel(level);
+  switch (title) {
+    case "Champion":
+      return {
+        title,
+        badgeClass: "border-amber-500/50 bg-amber-500/15 text-amber-500 font-extrabold animate-pulse ring-1 ring-amber-500/30",
+      };
+    case "Master":
+      return {
+        title,
+        badgeClass: "border-purple-500/50 bg-purple-500/15 text-purple-400 font-bold",
+      };
+    case "Expert":
+      return {
+        title,
+        badgeClass: "border-emerald-500/50 bg-emerald-500/15 text-emerald-500 font-bold",
+      };
+    case "Coder":
+      return {
+        title,
+        badgeClass: "border-blue-500/50 bg-blue-500/15 text-blue-500 font-medium",
+      };
+    case "Rookie":
+    default:
+      return {
+        title,
+        badgeClass: "border-slate-500/40 bg-slate-500/10 text-slate-400 font-medium",
+      };
+  }
+}
+
 export function formatDuration(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
   const s = totalSeconds % 60;

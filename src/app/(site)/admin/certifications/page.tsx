@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Spinner } from "@/components/shared/spinner";
+import { EmptyState } from "@/components/shared/empty-state";
 import { useCertProgram } from "@/lib/hooks";
 
 export default function AdminCertificationsPage() {
@@ -102,7 +103,7 @@ export default function AdminCertificationsPage() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
         <h1 className="font-display text-3xl font-bold">30-Day Certification Program</h1>
         <p className="text-muted-foreground">
@@ -217,6 +218,8 @@ export default function AdminCertificationsPage() {
               <div className="flex justify-center py-12">
                 <Spinner className="h-8 w-8" />
               </div>
+            ) : days.length === 0 ? (
+              <EmptyState icon={Award} title="No days configured yet" description="Add a day to get started." />
             ) : (
               <div className="overflow-x-auto">
                 <Table>
@@ -232,8 +235,8 @@ export default function AdminCertificationsPage() {
                     {days.map((d) => (
                       <TableRow key={d.id}>
                         <TableCell className="font-bold">Day {d.day}</TableCell>
-                        <TableCell>
-                          <div className="font-semibold text-sm">{d.certName}</div>
+                        <TableCell className="max-w-[16rem]">
+                          <div className="truncate font-semibold text-sm" title={d.certName}>{d.certName}</div>
                           <div className="text-xs text-muted-foreground line-clamp-1">
                             {d.description}
                           </div>

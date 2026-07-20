@@ -59,7 +59,7 @@ export function GalleryContent() {
                 viewport={{ once: true }}
                 transition={{ duration: 0.3, delay: i * 0.03 }}
                 onClick={() => setSelected(item)}
-                className="group mb-4 block w-full overflow-hidden rounded-xl border bg-card transition-all duration-300 hover:border-brand-500/30 hover:shadow-lg"
+                className="group mb-4 block w-full overflow-hidden rounded-xl border bg-card transition-all duration-300 hover:border-brand-500/30 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <div className="overflow-hidden">
                   <img
@@ -105,7 +105,7 @@ export function GalleryContent() {
             >
               <button
                 onClick={() => setSelected(null)}
-                className="absolute -right-2 -top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white text-black shadow-lg transition-transform hover:scale-110"
+                className="absolute -right-2 -top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white text-black shadow-lg transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label="Close lightbox"
               >
                 <X className="h-4 w-4" />

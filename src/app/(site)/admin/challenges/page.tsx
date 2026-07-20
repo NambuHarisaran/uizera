@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Spinner } from "@/components/shared/spinner";
+import { EmptyState } from "@/components/shared/empty-state";
 import { useAdminChallenges } from "@/lib/hooks";
 import { formatCoins, toDate } from "@/lib/utils";
 import type { Challenge, ChallengeStatus } from "@/types";
@@ -92,7 +93,7 @@ export default function AdminChallengesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-3xl font-bold">Weekly Challenges</h1>
           <p className="text-muted-foreground">
@@ -210,6 +211,8 @@ export default function AdminChallengesPage() {
             <div className="flex justify-center py-12">
               <Spinner className="h-8 w-8" />
             </div>
+          ) : challenges.length === 0 ? (
+            <EmptyState icon={Target} title="No challenges yet" description="Create one to get started." />
           ) : (
             <div className="overflow-x-auto">
               <Table>
@@ -229,8 +232,8 @@ export default function AdminChallengesPage() {
                     return (
                       <TableRow key={c.id}>
                         <TableCell className="font-semibold">Week {c.week}</TableCell>
-                        <TableCell>
-                          <div className="font-semibold text-sm">{c.title}</div>
+                        <TableCell className="max-w-[16rem]">
+                          <div className="truncate font-semibold text-sm" title={c.title}>{c.title}</div>
                           <div className="text-xs text-muted-foreground line-clamp-1">
                             {c.description}
                           </div>
@@ -248,6 +251,7 @@ export default function AdminChallengesPage() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            aria-label={`Delete challenge ${c.title}`}
                             onClick={() => handleDelete(c.id)}
                             className="text-destructive hover:bg-destructive/10"
                           >

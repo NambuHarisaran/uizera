@@ -40,9 +40,7 @@ function EventCard({ event }: { event: CommunityEvent }) {
           {isPast ? (
             <Badge variant="secondary">Past Event</Badge>
           ) : (
-            <Badge className="bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400">
-              Upcoming
-            </Badge>
+            <Badge variant="success">Upcoming</Badge>
           )}
         </div>
         <h3 className="mb-2 font-display text-lg font-semibold">{event.title}</h3>

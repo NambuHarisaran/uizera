@@ -139,12 +139,10 @@ function DayCard({
               </Button>
             )}
             {status === "reported" && (
-              <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                Awaiting Verification
-              </Badge>
+              <Badge variant="warning">Awaiting Verification</Badge>
             )}
             {status === "completed" && (
-              <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <Badge variant="success">
                 <CheckCircle className="mr-1 h-3 w-3" />
                 Done
               </Badge>

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Search, Shield, ShieldAlert, UserCheck, UserX } from "lucide-react";
+import { Search, Shield, ShieldAlert, Users, UserCheck, UserX } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/shared/spinner";
+import { EmptyState } from "@/components/shared/empty-state";
 import { useAdminUsers } from "@/lib/hooks";
 import { useAuth } from "@/components/providers/auth-provider";
 import { formatCoins, initials } from "@/lib/utils";
@@ -105,6 +106,12 @@ export default function AdminUsersPage() {
             <div className="flex justify-center py-12">
               <Spinner className="h-8 w-8" />
             </div>
+          ) : filteredUsers.length === 0 ? (
+            <EmptyState
+              icon={Users}
+              title={search ? "No matching users" : "No users yet"}
+              description={search ? "Try a different search term." : "Members will appear here once they sign in."}
+            />
           ) : (
             <div className="overflow-x-auto">
               <Table>
@@ -126,15 +133,19 @@ export default function AdminUsersPage() {
 
                     return (
                       <TableRow key={u.uid}>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-9 w-9">
+                        <TableCell className="max-w-[12rem] sm:max-w-[16rem]">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <Avatar className="h-9 w-9 shrink-0">
                               <AvatarImage src={u.photoURL ?? undefined} alt={u.displayName} />
                               <AvatarFallback>{initials(u.displayName)}</AvatarFallback>
                             </Avatar>
-                            <div>
-                              <p className="font-medium text-sm">{u.displayName}</p>
-                              <p className="text-xs text-muted-foreground">{u.email}</p>
+                            <div className="min-w-0">
+                              <p className="truncate font-medium text-sm" title={u.displayName}>
+                                {u.displayName}
+                              </p>
+                              <p className="truncate text-xs text-muted-foreground" title={u.email}>
+                                {u.email}
+                              </p>
                             </div>
                           </div>
                         </TableCell>
@@ -155,7 +166,7 @@ export default function AdminUsersPage() {
 
                         <TableCell>
                           {isSuperAdmin ? (
-                            <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/30">
+                            <Badge variant="warning">
                               <Shield className="mr-1 h-3 w-3" /> Super Admin
                             </Badge>
                           ) : (
@@ -179,9 +190,7 @@ export default function AdminUsersPage() {
                           {u.disabled ? (
                             <Badge variant="destructive">Disabled</Badge>
                           ) : (
-                            <Badge variant="outline" className="text-emerald-600 border-emerald-500/30">
-                              Active
-                            </Badge>
+                            <Badge variant="success">Active</Badge>
                           )}
                         </TableCell>
 

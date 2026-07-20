@@ -20,7 +20,7 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/components/providers/auth-provider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
+import { Badge, TIER_COLOR_CLASSES } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -42,13 +42,6 @@ const statCards = [
   { key: "challengesApproved", label: "Challenges Done", icon: Target, color: "text-emerald-500" },
   { key: "certsCompleted", label: "Certs Completed", icon: Award, color: "text-violet-500" },
 ] as const;
-
-const tierColors = {
-  bronze: "bg-amber-700/10 text-amber-700 dark:text-amber-600 border-amber-700/30",
-  silver: "bg-gray-400/10 text-gray-600 dark:text-gray-400 border-gray-400/30",
-  gold: "bg-amber-400/10 text-amber-500 border-amber-400/30",
-  legend: "bg-brand-500/10 text-brand-500 border-brand-500/30",
-};
 
 export function ProfileContent() {
   const { user, loading } = useAuth();
@@ -106,7 +99,7 @@ export function ProfileContent() {
   return (
     <div className="pb-24">
       {/* Header */}
-      <section className="hero-glow relative overflow-hidden py-16">
+      <section className="hero-glow relative overflow-hidden py-24">
         <div className="bg-grid pointer-events-none absolute inset-0 opacity-20" />
         <div className="container relative">
           <motion.div
@@ -115,15 +108,19 @@ export function ProfileContent() {
             transition={{ duration: 0.5 }}
             className="flex flex-col items-center gap-6 sm:flex-row sm:items-start"
           >
-            <Avatar className="h-24 w-24 border-4 border-brand-500/30 shadow-xl">
+            <Avatar className="h-24 w-24 shrink-0 border-4 border-brand-500/30 shadow-xl">
               <AvatarImage src={user.photoURL ?? undefined} alt={user.displayName} />
               <AvatarFallback className="bg-uipath-orange/15 font-display text-2xl text-uipath-orange">
                 {initials(user.displayName)}
               </AvatarFallback>
             </Avatar>
-            <div className="text-center sm:text-left">
-              <h1 className="font-display text-3xl font-bold">{user.displayName}</h1>
-              <p className="mt-1 text-muted-foreground">{user.email}</p>
+            <div className="min-w-0 max-w-full text-center sm:text-left">
+              <h1 className="truncate font-display text-3xl font-bold" title={user.displayName}>
+                {user.displayName}
+              </h1>
+              <p className="mt-1 truncate text-muted-foreground" title={user.email}>
+                {user.email}
+              </p>
               <div className="mt-3 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
                 <Badge variant="outline" className="gap-1">
                   <Shield className="h-3 w-3" />
@@ -216,7 +213,7 @@ export function ProfileContent() {
                     return (
                       <div
                         key={b}
-                        className={`flex items-center gap-3 rounded-lg border p-3 ${tierColors[def.tier]}`}
+                        className={`flex items-center gap-3 rounded-lg border p-3 ${TIER_COLOR_CLASSES[def.tier]}`}
                       >
                         <div className="text-lg">🏅</div>
                         <div>

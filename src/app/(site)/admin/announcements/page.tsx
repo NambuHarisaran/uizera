@@ -12,8 +12,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/shared/spinner";
+import { EmptyState } from "@/components/shared/empty-state";
 import { useAnnouncements } from "@/lib/hooks";
+
+const priorityVariant = {
+  normal: "outline",
+  important: "warning",
+  urgent: "destructive",
+} as const;
 
 export default function AdminAnnouncementsPage() {
   const { data, isLoading, refetch } = useAnnouncements();
@@ -76,7 +84,7 @@ export default function AdminAnnouncementsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-3xl font-bold">Announcements</h1>
           <p className="text-muted-foreground">
@@ -158,39 +166,48 @@ export default function AdminAnnouncementsPage() {
             <div className="flex justify-center py-12">
               <Spinner className="h-8 w-8" />
             </div>
+          ) : announcements.length === 0 ? (
+            <EmptyState icon={Megaphone} title="No announcements yet" description="Post one to get started." />
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Priority</TableHead>
-                  <TableHead>Pinned</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {announcements.map((a) => (
-                  <TableRow key={a.id}>
-                    <TableCell>
-                      <div className="font-semibold text-sm">{a.title}</div>
-                      <div className="text-xs text-muted-foreground line-clamp-1">{a.body}</div>
-                    </TableCell>
-                    <TableCell className="capitalize text-sm">{a.priority}</TableCell>
-                    <TableCell className="text-sm">{a.pinned ? "Yes" : "No"}</TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(a.id)}
-                        className="text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Title</TableHead>
+                    <TableHead>Priority</TableHead>
+                    <TableHead>Pinned</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {announcements.map((a) => (
+                    <TableRow key={a.id}>
+                      <TableCell className="max-w-[20rem]">
+                        <div className="truncate font-semibold text-sm" title={a.title}>{a.title}</div>
+                        <div className="text-xs text-muted-foreground line-clamp-1">{a.body}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={priorityVariant[a.priority]} className="capitalize">
+                          {a.priority}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm">{a.pinned ? "Yes" : "No"}</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          aria-label={`Delete announcement ${a.title}`}
+                          onClick={() => handleDelete(a.id)}
+                          className="text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

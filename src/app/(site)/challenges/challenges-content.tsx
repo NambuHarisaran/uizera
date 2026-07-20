@@ -29,9 +29,12 @@ import { useChallenges } from "@/lib/hooks";
 import { formatCoins, toDate } from "@/lib/utils";
 import type { Challenge, ChallengeSubmission, SubmissionStatus } from "@/types";
 
-const submissionStatusConfig: Record<SubmissionStatus, { label: string; color: string; icon: typeof CheckCircle }> = {
-  pending: { label: "Pending Review", color: "bg-amber-500/10 text-amber-600 dark:text-amber-400", icon: Clock },
-  approved: { label: "Approved", color: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400", icon: CheckCircle },
+const submissionStatusConfig: Record<
+  SubmissionStatus,
+  { label: string; variant?: "warning" | "success"; color?: string; icon: typeof CheckCircle }
+> = {
+  pending: { label: "Pending Review", variant: "warning", icon: Clock },
+  approved: { label: "Approved", variant: "success", icon: CheckCircle },
   rejected: { label: "Rejected", color: "bg-destructive/10 text-destructive", icon: XCircle },
 };
 
@@ -196,7 +199,7 @@ function ChallengeCard({
                   const cfg = submissionStatusConfig[submission.status];
                   const Icon = cfg.icon;
                   return (
-                    <Badge className={cfg.color}>
+                    <Badge variant={cfg.variant} className={cfg.color}>
                       <Icon className="mr-1 h-3 w-3" />
                       {cfg.label}
                     </Badge>

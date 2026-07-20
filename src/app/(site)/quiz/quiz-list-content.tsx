@@ -12,10 +12,10 @@ import { useQuizzes } from "@/lib/hooks";
 import { formatCoins, formatDuration, toDate } from "@/lib/utils";
 import type { Quiz, QuizStatus } from "@/types";
 
-const statusConfig: Record<QuizStatus, { label: string; color: string }> = {
+const statusConfig: Record<QuizStatus, { label: string; variant?: "success"; color?: string }> = {
   draft: { label: "Draft", color: "bg-gray-500/10 text-gray-600 dark:text-gray-400" },
   scheduled: { label: "Upcoming", color: "bg-sky-500/10 text-sky-600 dark:text-sky-400" },
-  live: { label: "Live Now", color: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
+  live: { label: "Live Now", variant: "success" },
   closed: { label: "Closed", color: "bg-muted text-muted-foreground" },
 };
 
@@ -43,7 +43,7 @@ function QuizCard({ quiz }: { quiz: Quiz }) {
       )}
       <div className="flex flex-1 flex-col p-6">
         <div className="mb-3 flex items-center gap-2">
-          <Badge className={config.color}>{config.label}</Badge>
+          <Badge variant={config.variant} className={config.color}>{config.label}</Badge>
           {quiz.status === "live" && (
             <span className="relative flex h-2.5 w-2.5">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
@@ -52,7 +52,7 @@ function QuizCard({ quiz }: { quiz: Quiz }) {
           )}
         </div>
 
-        <h3 className="mb-2 font-display text-lg font-semibold">{quiz.title}</h3>
+        <h3 className="mb-2 line-clamp-2 font-display text-lg font-semibold">{quiz.title}</h3>
         {quiz.description && (
           <p className="mb-4 line-clamp-2 text-sm text-muted-foreground">{quiz.description}</p>
         )}

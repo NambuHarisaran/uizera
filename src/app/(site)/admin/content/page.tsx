@@ -12,14 +12,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Spinner } from "@/components/shared/spinner";
+import { EmptyState } from "@/components/shared/empty-state";
 import { useEvents, useResources, useTeam, useGallery } from "@/lib/hooks";
 
 export default function AdminContentPage() {
   const [tab, setTab] = useState("events");
-  const { data: eventsData, refetch: refetchEvents } = useEvents();
-  const { data: resourcesData, refetch: refetchResources } = useResources();
-  const { data: teamData, refetch: refetchTeam } = useTeam();
-  const { data: galleryData, refetch: refetchGallery } = useGallery();
+  const { data: eventsData, isLoading: eventsLoading, refetch: refetchEvents } = useEvents();
+  const { data: resourcesData, isLoading: resourcesLoading, refetch: refetchResources } = useResources();
+  const { data: teamData, isLoading: teamLoading, refetch: refetchTeam } = useTeam();
+  const { data: galleryData, isLoading: galleryLoading, refetch: refetchGallery } = useGallery();
 
   // Event modal state
   const [eventOpen, setEventOpen] = useState(false);
@@ -129,33 +130,46 @@ export default function AdminContentPage() {
               </Dialog>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Venue</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {eventsData?.events?.map((e: any) => (
-                    <TableRow key={e.id}>
-                      <TableCell className="font-semibold">{e.title}</TableCell>
-                      <TableCell>{e.venue || "—"}</TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteItem("events", e.id)}
-                          className="text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              {eventsLoading ? (
+                <div className="flex justify-center py-12">
+                  <Spinner className="h-8 w-8" />
+                </div>
+              ) : !eventsData?.events?.length ? (
+                <EmptyState icon={Calendar} title="No events yet" description="Add one to get started." />
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Title</TableHead>
+                        <TableHead>Venue</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {eventsData.events.map((e: any) => (
+                        <TableRow key={e.id}>
+                          <TableCell className="max-w-[16rem] truncate font-semibold" title={e.title}>
+                            {e.title}
+                          </TableCell>
+                          <TableCell className="max-w-[10rem] truncate">{e.venue || "—"}</TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              aria-label={`Delete event ${e.title}`}
+                              onClick={() => handleDeleteItem("events", e.id)}
+                              className="text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -166,33 +180,46 @@ export default function AdminContentPage() {
               <CardTitle>Resources</CardTitle>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {resourcesData?.items?.map((r: any) => (
-                    <TableRow key={r.id}>
-                      <TableCell className="font-semibold">{r.title}</TableCell>
-                      <TableCell>{r.category}</TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteItem("resources", r.id)}
-                          className="text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              {resourcesLoading ? (
+                <div className="flex justify-center py-12">
+                  <Spinner className="h-8 w-8" />
+                </div>
+              ) : !resourcesData?.items?.length ? (
+                <EmptyState icon={FileText} title="No resources yet" description="Add one to get started." />
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Title</TableHead>
+                        <TableHead>Category</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {resourcesData.items.map((r: any) => (
+                        <TableRow key={r.id}>
+                          <TableCell className="max-w-[16rem] truncate font-semibold" title={r.title}>
+                            {r.title}
+                          </TableCell>
+                          <TableCell className="max-w-[10rem] truncate">{r.category}</TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              aria-label={`Delete resource ${r.title}`}
+                              onClick={() => handleDeleteItem("resources", r.id)}
+                              className="text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -203,35 +230,48 @@ export default function AdminContentPage() {
               <CardTitle>Team Members</CardTitle>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Section</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {teamData?.items?.map((m: any) => (
-                    <TableRow key={m.id}>
-                      <TableCell className="font-semibold">{m.name}</TableCell>
-                      <TableCell>{m.role}</TableCell>
-                      <TableCell>{m.section}</TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteItem("team", m.id)}
-                          className="text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              {teamLoading ? (
+                <div className="flex justify-center py-12">
+                  <Spinner className="h-8 w-8" />
+                </div>
+              ) : !teamData?.items?.length ? (
+                <EmptyState icon={Users} title="No team members yet" description="Add one to get started." />
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Section</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {teamData.items.map((m: any) => (
+                        <TableRow key={m.id}>
+                          <TableCell className="max-w-[12rem] truncate font-semibold" title={m.name}>
+                            {m.name}
+                          </TableCell>
+                          <TableCell className="max-w-[10rem] truncate">{m.role}</TableCell>
+                          <TableCell>{m.section}</TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              aria-label={`Delete team member ${m.name}`}
+                              onClick={() => handleDeleteItem("team", m.id)}
+                              className="text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -242,33 +282,46 @@ export default function AdminContentPage() {
               <CardTitle>Gallery Images</CardTitle>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Caption</TableHead>
-                    <TableHead>Event</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {galleryData?.items?.map((g: any) => (
-                    <TableRow key={g.id}>
-                      <TableCell className="font-semibold">{g.caption || "Image"}</TableCell>
-                      <TableCell>{g.event || "—"}</TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteItem("gallery", g.id)}
-                          className="text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              {galleryLoading ? (
+                <div className="flex justify-center py-12">
+                  <Spinner className="h-8 w-8" />
+                </div>
+              ) : !galleryData?.items?.length ? (
+                <EmptyState icon={Camera} title="No gallery images yet" description="Add one to get started." />
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Caption</TableHead>
+                        <TableHead>Event</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {galleryData.items.map((g: any) => (
+                        <TableRow key={g.id}>
+                          <TableCell className="max-w-[16rem] truncate font-semibold" title={g.caption || "Image"}>
+                            {g.caption || "Image"}
+                          </TableCell>
+                          <TableCell className="max-w-[10rem] truncate">{g.event || "—"}</TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              aria-label={`Delete gallery image ${g.caption || "Image"}`}
+                              onClick={() => handleDeleteItem("gallery", g.id)}
+                              className="text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

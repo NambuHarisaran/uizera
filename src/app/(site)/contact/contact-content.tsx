@@ -85,14 +85,14 @@ export function ContactContent() {
       </section>
 
       <section className="container py-16">
-        <div className="mx-auto grid max-w-5xl gap-12 lg:grid-cols-5">
+        <div className="mx-auto grid max-w-5xl gap-12 md:grid-cols-5">
           {/* Contact Info */}
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5 }}
-            className="lg:col-span-2"
+            className="md:col-span-2"
           >
             <h2 className="mb-6 font-display text-2xl font-bold">Contact Info</h2>
             <div className="space-y-5">
@@ -145,7 +145,7 @@ export function ContactContent() {
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5 }}
-            className="lg:col-span-3"
+            className="md:col-span-3"
           >
             {submitted ? (
               <div className="flex flex-col items-center rounded-2xl border bg-card p-12 text-center">

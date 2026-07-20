@@ -131,7 +131,7 @@ export default function QuizPlayPage({ params }: { params: Promise<{ quizId: str
             You scored {existingAttempt.score} / {existingAttempt.maxScore} points and earned{" "}
             {existingAttempt.coinsEarned} coins.
           </p>
-          <div className="mt-6 flex justify-center gap-3">
+          <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
             <Button variant="outline" onClick={() => router.push("/quiz")}>
               All Quizzes
             </Button>
@@ -153,15 +153,17 @@ export default function QuizPlayPage({ params }: { params: Promise<{ quizId: str
     return (
       <div className="container max-w-3xl py-12 space-y-6">
         {/* Header bar */}
-        <div className="flex items-center justify-between rounded-xl border bg-card p-4">
-          <div>
-            <h2 className="font-display text-lg font-bold">{quiz.title}</h2>
+        <div className="flex items-center justify-between gap-3 rounded-xl border bg-card p-4">
+          <div className="min-w-0">
+            <h2 className="truncate font-display text-lg font-bold" title={quiz.title}>
+              {quiz.title}
+            </h2>
             <p className="text-xs text-muted-foreground">
               Question {currentQIndex + 1} of {questions.length}
             </p>
           </div>
 
-          <div className="flex items-center gap-2 font-mono text-lg font-bold text-amber-500">
+          <div className="flex shrink-0 items-center gap-2 font-mono text-lg font-bold text-amber-500">
             <Clock className="h-5 w-5" />
             {timeLeft !== null ? formatDuration(timeLeft) : "--:--"}
           </div>
@@ -183,8 +185,10 @@ export default function QuizPlayPage({ params }: { params: Promise<{ quizId: str
                 <button
                   key={oIdx}
                   type="button"
+                  role="radio"
+                  aria-checked={isSelected}
                   onClick={() => handleOptionSelect(currentQ.id, oIdx)}
-                  className={`flex w-full items-center justify-between rounded-xl border p-4 text-left font-medium transition-all ${
+                  className={`flex w-full items-center justify-between rounded-xl border p-4 text-left font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                     isSelected
                       ? "border-brand-500 bg-brand-500/10 text-brand-600 dark:text-brand-400"
                       : "hover:bg-accent"

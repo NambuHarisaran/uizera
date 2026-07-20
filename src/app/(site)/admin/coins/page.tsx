@@ -83,12 +83,13 @@ export default function AdminCoinsPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <Label>Amount (Positive to award, negative to deduct)</Label>
+                <Label>Amount</Label>
                 <Input
                   type="number"
                   value={amount}
                   onChange={(e) => setAmount(Number(e.target.value))}
                 />
+                <p className="mt-1 text-xs text-muted-foreground">Positive to award, negative to deduct.</p>
               </div>
 
               <div>

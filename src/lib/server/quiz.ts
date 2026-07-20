@@ -11,6 +11,7 @@ export function buildQuizDocs(input: {
   title: string;
   description?: string | null;
   coverImage?: string | null;
+  mode?: "async" | "live";
   status: QuizStatus;
   startAt: number;
   endAt: number;
@@ -46,6 +47,7 @@ export function buildQuizDocs(input: {
     title: input.title,
     description: input.description ?? "",
     coverImage: input.coverImage ?? null,
+    mode: input.mode ?? "async",
     status: input.status,
     startAt: Timestamp.fromMillis(input.startAt),
     endAt: Timestamp.fromMillis(input.endAt),
@@ -100,6 +102,9 @@ export async function getAnswerKey(
 
 /** A quiz is playable inside its window while scheduled/live. */
 export function assertQuizOpen(quiz: Quiz, now: number): void {
+  if (quiz.mode === "live") {
+    throw new ApiError(400, "This is a live-session quiz — join it from the Live Stage link instead.");
+  }
   if (quiz.status === "draft") throw new ApiError(404, "Quiz not found.");
   if (quiz.status === "closed") throw new ApiError(400, "This quiz has ended.");
   const startAt = toMillis(quiz.startAt);

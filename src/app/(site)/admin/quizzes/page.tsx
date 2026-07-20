@@ -79,6 +79,7 @@ export default function AdminQuizzesPage() {
   // Form state
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [mode, setMode] = useState<"async" | "live">("async");
   const [status, setStatus] = useState<QuizStatus>("draft");
   const [startAt, setStartAt] = useState("");
   const [endAt, setEndAt] = useState("");
@@ -94,6 +95,7 @@ export default function AdminQuizzesPage() {
   const resetForm = () => {
     setTitle("");
     setDescription("");
+    setMode("async");
     setStatus("draft");
     setStartAt("");
     setEndAt("");
@@ -134,6 +136,7 @@ export default function AdminQuizzesPage() {
       setEditingId(quiz.id);
       setTitle(q.title ?? "");
       setDescription(q.description ?? "");
+      setMode(q.mode === "live" ? "live" : "async");
       setStatus(q.status ?? "draft");
       setStartAt(toLocalInput(q.startAt));
       setEndAt(toLocalInput(q.endAt));
@@ -207,7 +210,8 @@ export default function AdminQuizzesPage() {
       const body = {
         title,
         description,
-        status,
+        mode,
+        status: mode === "live" ? "draft" : status,
         startAt: new Date(startAt).getTime(),
         endAt: new Date(endAt).getTime(),
         durationSeconds: Number(durationSeconds),
@@ -277,6 +281,44 @@ export default function AdminQuizzesPage() {
             </DialogHeader>
             <div className="space-y-4 py-2">
               <div>
+                <Label>Quiz Type *</Label>
+                <div className="mt-1.5 grid gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setMode("async")}
+                    className={`rounded-xl border-2 p-3 text-left transition-colors ${
+                      mode === "async"
+                        ? "border-brand-500 bg-brand-500/10"
+                        : "border-border hover:border-brand-500/40"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2 font-semibold text-sm">
+                      <Zap className="h-4 w-4 text-brand-500" /> Website Quiz
+                    </span>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Self-paced. Listed publicly per its status/schedule.
+                    </p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode("live")}
+                    className={`rounded-xl border-2 p-3 text-left transition-colors ${
+                      mode === "live"
+                        ? "border-uipath-orange bg-uipath-orange/10"
+                        : "border-border hover:border-uipath-orange/40"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2 font-semibold text-sm">
+                      <Radio className="h-4 w-4 text-uipath-orange" /> Live Session
+                    </span>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Instructor-led. Hidden from the public list — students join only via the Live Stage link/QR once you start it.
+                    </p>
+                  </button>
+                </div>
+              </div>
+
+              <div>
                 <Label>Title *</Label>
                 <Input
                   value={title}
@@ -296,23 +338,32 @@ export default function AdminQuizzesPage() {
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <Label>Status</Label>
-                  <Select value={status} onValueChange={(v) => setStatus(v as QuizStatus)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="draft">Draft</SelectItem>
-                      <SelectItem value="scheduled">Scheduled</SelectItem>
-                      <SelectItem value="live">Live</SelectItem>
-                      <SelectItem value="closed">Closed</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {mode === "async" ? (
+                  <div>
+                    <Label>Status</Label>
+                    <Select value={status} onValueChange={(v) => setStatus(v as QuizStatus)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="draft">Draft</SelectItem>
+                        <SelectItem value="scheduled">Scheduled</SelectItem>
+                        <SelectItem value="live">Live</SelectItem>
+                        <SelectItem value="closed">Closed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div>
+                    <Label>Status</Label>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Controlled by Start/End in the Live Stage console.
+                    </p>
+                  </div>
+                )}
 
                 <div>
-                  <Label>Duration (seconds)</Label>
+                  <Label>{mode === "live" ? "Time per Question (seconds)" : "Duration (seconds)"}</Label>
                   <Input
                     type="number"
                     value={durationSeconds}
@@ -360,7 +411,7 @@ export default function AdminQuizzesPage() {
                   />
                 </div>
 
-                <div>
+                <div className={mode === "live" ? "hidden" : undefined}>
                   <Label>Max Attempts</Label>
                   <Input
                     type="number"
@@ -487,7 +538,18 @@ export default function AdminQuizzesPage() {
                         </TableCell>
 
                         <TableCell>
-                          <Badge variant="outline">{q.status}</Badge>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Badge variant="outline">{q.status}</Badge>
+                            {q.mode === "live" ? (
+                              <Badge className="gap-1 bg-uipath-orange/15 text-uipath-orange">
+                                <Radio className="h-3 w-3" /> Live Session
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-muted-foreground">
+                                Website
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
 
                         <TableCell className="text-sm">{q.questionCount} Qs</TableCell>
@@ -501,15 +563,17 @@ export default function AdminQuizzesPage() {
                         </TableCell>
 
                         <TableCell className="text-right">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => router.push(`/admin/live-quiz/${q.id}`)}
-                            className="gap-1 border-uipath-orange/40 text-uipath-orange hover:bg-uipath-orange/10 mr-1"
-                            title="Open Instructor Live Stage Console"
-                          >
-                            <Radio className="h-3.5 w-3.5 animate-pulse" /> Live Stage
-                          </Button>
+                          {q.mode === "live" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => router.push(`/admin/live-quiz/${q.id}`)}
+                              className="gap-1 border-uipath-orange/40 text-uipath-orange hover:bg-uipath-orange/10 mr-1"
+                              title="Open Instructor Live Stage Console"
+                            >
+                              <Radio className="h-3.5 w-3.5 animate-pulse" /> Live Stage
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"

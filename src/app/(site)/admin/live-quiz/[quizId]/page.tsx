@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/shared/spinner";
+import { QrCode } from "@/components/shared/qr-code";
 import { postJson, unwrap } from "@/lib/fetcher";
 import { shortName } from "@/lib/utils";
 import { optionStyleFor } from "@/lib/quiz-option-styles";
@@ -157,6 +158,8 @@ export default function AdminLiveQuizStagePage({
 
   const currentQIndex = session?.currentQuestionIndex ?? 0;
   const currentQ = questions[currentQIndex];
+  const joinUrl =
+    typeof window !== "undefined" ? `${window.location.origin}/quiz/${quizId}/live` : "";
 
   return (
     <div
@@ -170,6 +173,8 @@ export default function AdminLiveQuizStagePage({
       {isFullscreen ? (
         <PresenterView
           quizTitle={quizData?.title}
+          sessionStatus={session?.status ?? "waiting"}
+          joinUrl={joinUrl}
           currentQ={currentQ}
           currentQIndex={currentQIndex}
           totalQuestions={questions.length}
@@ -179,6 +184,7 @@ export default function AdminLiveQuizStagePage({
           revealAnswer={Boolean(session?.revealAnswer)}
           actionLoading={actionLoading}
           onExit={exitPresenterMode}
+          onStart={() => handleControl("start")}
           onPrev={() => handleControl("setQuestion", currentQIndex - 1)}
           onNext={() => handleControl("setQuestion", currentQIndex + 1)}
           onToggleAnswer={() => handleControl("toggleAnswer")}
@@ -213,7 +219,7 @@ export default function AdminLiveQuizStagePage({
             </Button>
           )}
 
-          {session?.status === "active" && (
+          {session?.status !== "ended" && (
             <Button
               onClick={enterPresenterMode}
               variant="outline"
@@ -400,15 +406,20 @@ export default function AdminLiveQuizStagePage({
           </Card>
 
           <Card className="bg-uipath-orange/10 border-uipath-orange/30">
-            <CardContent className="p-4 space-y-2">
+            <CardContent className="p-4 space-y-3">
               <h4 className="font-bold text-sm text-uipath-orange flex items-center gap-1.5">
                 <Users className="h-4 w-4" /> Student Stage Link
               </h4>
               <p className="text-xs text-muted-foreground">
-                Share or project this link for live participants:
+                Share this link, or have students scan the QR to join:
               </p>
+              {joinUrl && (
+                <div className="flex justify-center rounded-lg bg-white p-3">
+                  <QrCode value={joinUrl} size={140} />
+                </div>
+              )}
               <div className="rounded-lg bg-background p-2 text-[11px] font-mono select-all truncate border">
-                {typeof window !== "undefined" ? `${window.location.origin}/quiz/${quizId}/live` : `/quiz/${quizId}/live`}
+                {joinUrl || `/quiz/${quizId}/live`}
               </div>
             </CardContent>
           </Card>
@@ -422,6 +433,8 @@ export default function AdminLiveQuizStagePage({
 
 interface PresenterViewProps {
   quizTitle: string | undefined;
+  sessionStatus: "waiting" | "active" | "ended";
+  joinUrl: string;
   currentQ: any;
   currentQIndex: number;
   totalQuestions: number;
@@ -431,6 +444,7 @@ interface PresenterViewProps {
   revealAnswer: boolean;
   actionLoading: boolean;
   onExit: () => void;
+  onStart: () => void;
   onPrev: () => void;
   onNext: () => void;
   onToggleAnswer: () => void;
@@ -445,6 +459,8 @@ interface PresenterViewProps {
  * never gets unmounted mid-toggle. */
 function PresenterView({
   quizTitle,
+  sessionStatus,
+  joinUrl,
   currentQ,
   currentQIndex,
   totalQuestions,
@@ -454,6 +470,7 @@ function PresenterView({
   revealAnswer,
   actionLoading,
   onExit,
+  onStart,
   onPrev,
   onNext,
   onToggleAnswer,
@@ -462,6 +479,52 @@ function PresenterView({
   isLastQuestion,
 }: PresenterViewProps) {
   const total = optionCounts ? optionCounts.reduce((s, c) => s + c, 0) : 0;
+
+  if (sessionStatus === "waiting") {
+    return (
+      <div className="flex h-full flex-1 flex-col items-center justify-center gap-8 text-center">
+        <div className="flex items-center gap-3">
+          <Radio className="h-6 w-6 text-uipath-orange animate-pulse" />
+          <h1 className="font-display text-2xl font-bold sm:text-3xl">
+            {quizTitle || "Live Stage Quiz"}
+          </h1>
+        </div>
+        <p className="font-mono text-sm font-bold uppercase tracking-widest text-muted-foreground">
+          Scan to join the stage
+        </p>
+        {joinUrl && (
+          <div className="rounded-2xl bg-white p-6 shadow-lg">
+            <QrCode value={joinUrl} size={280} />
+          </div>
+        )}
+        <p className="max-w-md break-all font-mono text-sm text-muted-foreground">{joinUrl}</p>
+        <Button
+          onClick={onStart}
+          disabled={actionLoading}
+          size="lg"
+          className="gap-2 bg-emerald-600 px-8 text-white hover:bg-emerald-700 font-bold"
+        >
+          <Play className="h-5 w-5" /> Start Stage Quiz
+        </Button>
+        <Button variant="ghost" size="sm" onClick={onExit} className="gap-1.5">
+          <Minimize2 className="h-4 w-4" /> Exit Fullscreen
+        </Button>
+      </div>
+    );
+  }
+
+  if (sessionStatus === "ended") {
+    return (
+      <div className="flex h-full flex-1 flex-col items-center justify-center gap-4 text-center">
+        <Trophy className="h-16 w-16 text-amber-500" />
+        <h1 className="font-display text-2xl font-bold sm:text-3xl">Live Stage Ended</h1>
+        <p className="text-muted-foreground">Exit fullscreen to review the final leaderboard.</p>
+        <Button variant="outline" onClick={onExit} className="gap-1.5">
+          <Minimize2 className="h-4 w-4" /> Exit Fullscreen
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-1 flex-col">

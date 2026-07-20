@@ -19,8 +19,13 @@ export async function GET(
     const { quizId } = await params;
 
     const quiz = await getQuizOrThrow(quizId);
-    if (quiz.status === "draft" && !isAdminRole(user.role)) {
-      throw new ApiError(404, "Quiz not found.");
+    if (!isAdminRole(user.role)) {
+      // Draft quizzes aren't published yet; live-session quizzes are only
+      // ever reachable through the Live Stage link/QR, never this self-paced
+      // flow — both stay a plain 404 to non-admins.
+      if (quiz.status === "draft" || quiz.mode === "live") {
+        throw new ApiError(404, "Quiz not found.");
+      }
     }
 
     // Latest attempt lives at a deterministic id derived from the per-user

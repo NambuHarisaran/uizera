@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { handleApi, jsonOk, requireUser } from "@/lib/server/api";
 import { isAdminRole } from "@/lib/auth/session";
-import { getAnswerKey } from "@/lib/server/quiz";
+import { getAnswerKey, getQuizQuestions } from "@/lib/server/quiz";
 
 export const runtime = "nodejs";
 
@@ -29,24 +29,19 @@ export async function GET(
       revealAnswer: false,
     };
 
-    const questionsSnap = await db
-      .collection("quizzes")
-      .doc(quizId)
-      .collection("questions")
-      .orderBy("publicDoc.order")
-      .get();
-
-    const questions = questionsSnap.docs.map((d) => {
-      const p = d.data().publicDoc;
-      return {
-        id: d.id,
-        type: p.type,
-        prompt: p.prompt,
-        imageUrl: p.imageUrl,
-        options: p.options,
-        points: p.points,
-      };
-    });
+    // Question docs are stored flat (order/prompt/options at the top level —
+    // see buildQuizDocs in lib/server/quiz.ts). A prior version of this route
+    // queried orderBy("publicDoc.order") and read d.data().publicDoc, a field
+    // that never existed on these docs; Firestore silently drops every doc
+    // missing the ordered field, so the stage always showed "0 questions".
+    const questions = (await getQuizQuestions(quizId)).map((q) => ({
+      id: q.id,
+      type: q.type,
+      prompt: q.prompt,
+      imageUrl: q.imageUrl,
+      options: q.options,
+      points: q.points,
+    }));
 
     const currentQ = questions[session.currentQuestionIndex] || null;
     const isPrivileged = isAdminRole(user.role);

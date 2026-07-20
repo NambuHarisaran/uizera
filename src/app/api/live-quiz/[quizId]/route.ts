@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { handleApi, jsonOk, requireUser } from "@/lib/server/api";
+import { isAdminRole } from "@/lib/auth/session";
+import { getAnswerKey } from "@/lib/server/quiz";
 
 export const runtime = "nodejs";
 
@@ -18,7 +20,8 @@ export async function GET(
       return jsonOk({ error: "Quiz not found" }, { status: 404 });
     }
 
-    const sessionSnap = await db.collection("liveQuizSessions").doc(quizId).get();
+    const sessionRef = db.collection("liveQuizSessions").doc(quizId);
+    const sessionSnap = await sessionRef.get();
     const session = sessionSnap.data() || {
       quizId,
       status: "waiting",
@@ -45,32 +48,73 @@ export async function GET(
       };
     });
 
-    // Fetch attempts for live stage leaderboard
-    const attemptsSnap = await db
-      .collection("quizAttempts")
-      .where("quizId", "==", quizId)
-      .get();
+    const currentQ = questions[session.currentQuestionIndex] || null;
+    const isPrivileged = isAdminRole(user.role);
 
-    const leaderboard = attemptsSnap.docs
+    // Single read of every participant's response doc — powers the
+    // leaderboard, "how many have answered" count, and (once revealed or for
+    // the host) the live answer-distribution bars.
+    const responsesSnap = await sessionRef.collection("responses").get();
+
+    const leaderboard = responsesSnap.docs
       .map((d) => {
-        const data = d.data();
+        const r = d.data();
         return {
-          uid: data.uid,
-          displayName: data.displayName || "Participant",
-          score: data.score || 0,
-          maxScore: data.maxScore || 100,
-          completedAt: data.completedAt?.toMillis?.() || 0,
+          uid: d.id,
+          displayName: (r.displayName as string) || "Participant",
+          score: (r.totalScore as number) || 0,
         };
       })
-      .sort((a, b) => b.score - a.score || a.completedAt - b.completedAt)
+      .sort((a, b) => b.score - a.score)
       .slice(0, 10);
+
+    const myDoc = responsesSnap.docs.find((d) => d.id === user.uid);
+    const myAnswers = (myDoc?.data()?.answers ?? {}) as Record<
+      string,
+      { selected: number[]; correct: boolean; points: number }
+    >;
+    const myScore = (myDoc?.data()?.totalScore as number) || 0;
+
+    let answeredCount = 0;
+    let optionCounts: number[] | null = null;
+    let revealedCorrect: number[] | null = null;
+
+    if (currentQ) {
+      answeredCount = responsesSnap.docs.filter(
+        (d) => (d.data()?.answers ?? {})[currentQ.id]
+      ).length;
+
+      if (isPrivileged || session.revealAnswer) {
+        optionCounts = new Array(currentQ.options.length).fill(0);
+        for (const d of responsesSnap.docs) {
+          const ans = (d.data()?.answers ?? {})[currentQ.id];
+          if (ans?.selected) {
+            for (const idx of ans.selected as number[]) {
+              if (typeof idx === "number" && optionCounts[idx] !== undefined) {
+                optionCounts[idx] += 1;
+              }
+            }
+          }
+        }
+      }
+
+      if (session.revealAnswer) {
+        const answerKey = await getAnswerKey(quizId);
+        revealedCorrect = answerKey[currentQ.id]?.correct ?? null;
+      }
+    }
 
     return jsonOk({
       quiz: { id: quizSnap.id, ...quizSnap.data() },
       session,
       questions,
-      currentQuestion: questions[session.currentQuestionIndex] || null,
+      currentQuestion: currentQ,
       leaderboard,
+      myAnswers,
+      myScore,
+      answeredCount,
+      optionCounts,
+      revealedCorrect,
       userUid: user.uid,
     });
   });

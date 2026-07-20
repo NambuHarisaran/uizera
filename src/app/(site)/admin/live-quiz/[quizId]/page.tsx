@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/shared/spinner";
 import { postJson, unwrap } from "@/lib/fetcher";
+import { shortName } from "@/lib/utils";
 import type { LiveQuizSession } from "@/types";
 
 export default function AdminLiveQuizStagePage({
@@ -40,6 +41,8 @@ export default function AdminLiveQuizStagePage({
   const [session, setSession] = useState<LiveQuizSession | null>(null);
   const [questions, setQuestions] = useState<any[]>([]);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [answeredCount, setAnsweredCount] = useState(0);
+  const [optionCounts, setOptionCounts] = useState<number[] | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
   // Fetch initial data
@@ -51,6 +54,8 @@ export default function AdminLiveQuizStagePage({
         setSession(res.data.session);
         setQuestions(res.data.questions || []);
         setLeaderboard(res.data.leaderboard || []);
+        setAnsweredCount(res.data.answeredCount || 0);
+        setOptionCounts(res.data.optionCounts ?? null);
       }
     } catch {
       toast.error("Failed to load live quiz data.");
@@ -158,8 +163,13 @@ export default function AdminLiveQuizStagePage({
               <CardTitle className="text-xl font-bold flex items-center gap-2">
                 <Flame className="h-5 w-5 text-uipath-orange" /> Stage Control Panel
               </CardTitle>
-              <p className="text-xs text-muted-foreground mt-1">
-                Question {currentQIndex + 1} of {questions.length}
+              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
+                <span>Question {currentQIndex + 1} of {questions.length}</span>
+                {session?.status === "active" && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-brand-500/10 px-2 py-0.5 text-[11px] font-bold text-brand-600 dark:text-brand-400">
+                    <Users className="h-3 w-3" /> {answeredCount} answered
+                  </span>
+                )}
               </p>
             </div>
 
@@ -168,7 +178,7 @@ export default function AdminLiveQuizStagePage({
                 variant="outline"
                 size="sm"
                 onClick={() => handleControl("toggleAnswer")}
-                disabled={actionLoading}
+                disabled={actionLoading || session?.status !== "active"}
                 className="gap-1.5 text-xs font-bold"
               >
                 {session?.revealAnswer ? (
@@ -198,17 +208,35 @@ export default function AdminLiveQuizStagePage({
                   <div className="mt-6 grid gap-3 sm:grid-cols-2">
                     {currentQ.options?.map((opt: string, oIdx: number) => {
                       const isRevealed = session?.revealAnswer;
+                      const total = optionCounts ? optionCounts.reduce((s, c) => s + c, 0) : 0;
+                      const count = optionCounts?.[oIdx] ?? 0;
+                      const pct = total > 0 ? Math.round((count / total) * 100) : 0;
                       return (
                         <div
                           key={oIdx}
-                          className={`flex items-center justify-between rounded-xl border p-4 font-medium transition-all ${
+                          className={`relative overflow-hidden rounded-xl border p-4 font-medium transition-all ${
                             isRevealed
                               ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold"
                               : "bg-card"
                           }`}
                         >
-                          <span>{opt}</span>
-                          {isRevealed && <CheckCircle2 className="h-5 w-5 text-emerald-500" />}
+                          {optionCounts && (
+                            <span
+                              className="absolute inset-y-0 left-0 bg-brand-500/10"
+                              style={{ width: `${pct}%` }}
+                            />
+                          )}
+                          <div className="relative flex items-center justify-between gap-2">
+                            <span>{opt}</span>
+                            <div className="flex shrink-0 items-center gap-2">
+                              {optionCounts && (
+                                <span className="text-xs font-mono text-muted-foreground">
+                                  {count} · {pct}%
+                                </span>
+                              )}
+                              {isRevealed && <CheckCircle2 className="h-5 w-5 text-emerald-500" />}
+                            </div>
+                          </div>
                         </div>
                       );
                     })}
@@ -219,7 +247,7 @@ export default function AdminLiveQuizStagePage({
                 <div className="flex items-center justify-between pt-2">
                   <Button
                     variant="outline"
-                    disabled={currentQIndex === 0 || actionLoading}
+                    disabled={session?.status !== "active" || currentQIndex === 0 || actionLoading}
                     onClick={() => handleControl("setQuestion", currentQIndex - 1)}
                   >
                     Previous Question
@@ -229,7 +257,7 @@ export default function AdminLiveQuizStagePage({
                     {currentQIndex < questions.length - 1 ? (
                       <Button
                         onClick={() => handleControl("setQuestion", currentQIndex + 1)}
-                        disabled={actionLoading}
+                        disabled={session?.status !== "active" || actionLoading}
                         className="gap-2 bg-brand-500 hover:bg-brand-600 font-bold"
                       >
                         Next Question <SkipForward className="h-4 w-4" />
@@ -237,7 +265,7 @@ export default function AdminLiveQuizStagePage({
                     ) : (
                       <Button
                         onClick={() => handleControl("end")}
-                        disabled={actionLoading}
+                        disabled={session?.status !== "active" || actionLoading}
                         className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
                       >
                         <Trophy className="h-4 w-4" /> Show Final Leaderboard
@@ -273,13 +301,16 @@ export default function AdminLiveQuizStagePage({
                     key={item.uid}
                     className="flex items-center justify-between rounded-xl border bg-muted/20 p-3 text-xs"
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold font-mono text-muted-foreground">#{idx + 1}</span>
-                      <span className="font-semibold text-foreground truncate max-w-[120px]">
-                        {item.displayName}
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="shrink-0 font-bold font-mono text-muted-foreground">#{idx + 1}</span>
+                      <span
+                        className="truncate font-semibold text-foreground"
+                        title={item.displayName}
+                      >
+                        {shortName(item.displayName)}
                       </span>
                     </div>
-                    <span className="font-mono font-bold text-amber-500">{item.score} pts</span>
+                    <span className="shrink-0 font-mono font-bold text-amber-500">{item.score} pts</span>
                   </div>
                 ))
               )}

@@ -90,6 +90,12 @@ export const quizSubmitSchema = z.object({
     }),
 });
 
+export const liveQuizAnswerSchema = z.object({
+  questionId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
+  questionIndex: z.number().int().min(0),
+  selected: z.array(z.number().int().min(0).max(7)).max(8),
+});
+
 // ── Challenges ──────────────────────────────────────────────────────────────
 
 export const challengeUpsertSchema = z.object({

@@ -112,6 +112,13 @@ export async function POST(
         { merge: true }
       );
 
+      // Nobody has a listener on the responses subcollection (by design —
+      // rules keep individual answers server-only). Touch a field on the
+      // session doc instead, which every client already has an onSnapshot
+      // listener on, so the host's "X answered" count and everyone's live
+      // leaderboard update the instant anyone answers, no refresh needed.
+      tx.update(sessionRef, { lastAnswerAt: FieldValue.serverTimestamp() });
+
       return { isCorrect, pointsEarned, totalScore: newTotal };
     });
 

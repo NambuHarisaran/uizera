@@ -7,13 +7,9 @@ import { clientDb } from "@/lib/firebase/client";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2,
-  Circle,
-  Diamond,
   Radio,
-  Square,
   Timer,
   Trophy,
-  Triangle,
   Users,
   XCircle,
 } from "lucide-react";
@@ -24,14 +20,8 @@ import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/shared/spinner";
 import { postJson, unwrap } from "@/lib/fetcher";
 import { shortName } from "@/lib/utils";
+import { OPTION_STYLES } from "@/lib/quiz-option-styles";
 import type { LiveQuizSession } from "@/types";
-
-const OPTION_STYLES = [
-  { icon: Triangle, bg: "bg-red-500", text: "text-white", border: "border-red-500" },
-  { icon: Diamond, bg: "bg-uipath-blue", text: "text-white", border: "border-uipath-blue" },
-  { icon: Circle, bg: "bg-amber-400", text: "text-black", border: "border-amber-400" },
-  { icon: Square, bg: "bg-emerald-500", text: "text-white", border: "border-emerald-500" },
-] as const;
 
 interface AnswerRecord {
   selected: number[];

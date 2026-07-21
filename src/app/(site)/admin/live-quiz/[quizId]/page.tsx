@@ -19,6 +19,7 @@ import {
   Play,
   Radio,
   SkipForward,
+  RotateCcw,
   StopCircle,
   Trophy,
   Users,

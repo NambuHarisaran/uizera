@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Bot, Instagram, Linkedin, Mail, MapPin } from "lucide-react";
+import Image from "next/image";
+import { Instagram, Linkedin, Mail, MapPin } from "lucide-react";
 import { SITE } from "@/lib/constants";
 
 const footerLinks = {
@@ -31,10 +32,13 @@ export function Footer() {
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-5">
           <div className="lg:col-span-2">
             <Link href="/" className="flex items-center gap-2.5 font-display text-lg font-bold">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-uipath-orange text-white">
-                <Bot className="h-5 w-5" />
-              </span>
-              UI <span className="text-gradient">Zera</span> Club
+              <Image
+                src="/uizera-logo.png"
+                alt="UiZera Logo"
+                width={120}
+                height={40}
+                className="h-9 w-auto object-contain"
+              />
             </Link>
             <p className="mt-4 max-w-sm text-sm leading-relaxed text-muted-foreground">
               {SITE.description}

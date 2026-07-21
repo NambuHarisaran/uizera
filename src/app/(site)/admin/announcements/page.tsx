@@ -39,11 +39,13 @@ export default function AdminAnnouncementsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title,
-          body,
-          priority,
-          pinned,
-          published: true,
+          data: {
+            title,
+            body,
+            priority,
+            pinned,
+            published: true,
+          },
         }),
       });
 
@@ -63,8 +65,10 @@ export default function AdminAnnouncementsPage() {
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this announcement?")) return;
     try {
-      const res = await fetch(`/api/admin/content/announcements?id=${id}`, {
+      const res = await fetch(`/api/admin/content/announcements`, {
         method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
       });
       if (!res.ok) throw new Error("Failed to delete.");
       toast.success("Announcement deleted.");

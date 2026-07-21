@@ -63,6 +63,11 @@ service cloud.firestore {
     match /liveQuizSessions/{quizId} {
       allow read: if isSignedIn();
       allow write: if false;
+
+      match /answers/{uid} {
+        allow read: if isSignedIn();
+        allow write: if false;
+      }
     }
 
     // ── Quiz attempts: owner and admins can read; graded server-side only. ──

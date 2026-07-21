@@ -56,8 +56,14 @@ function TopThreeCards({ entries, period }: { entries: LeaderboardEntry[]; perio
               <AvatarImage src={entry.photoURL ?? undefined} alt={entry.displayName} />
               <AvatarFallback className="font-display">{initials(entry.displayName)}</AvatarFallback>
             </Avatar>
-            <p className={`mt-2 font-display font-semibold ${isFirst ? "text-base" : "text-sm"}`}>
-              {entry.displayName}
+            <p className={`mt-2 font-display font-semibold ${isFirst ? "text-base" : "text-sm"} text-center`}>
+              {entry.displayName.split(" ").slice(0, 1).join(" ")}
+              {entry.displayName.split(" ").length > 1 && (
+                <>
+                  <br />
+                  {entry.displayName.split(" ").slice(1).join(" ")}
+                </>
+              )}
             </p>
             <Badge variant="outline" className={`mt-1 text-[10px] uppercase font-bold tracking-wider ${rankStyleForLevel(levelForXp(entry.xp)).badgeClass}`}>
               {rankStyleForLevel(levelForXp(entry.xp)).title} · Lv. {levelForXp(entry.xp)}
@@ -112,7 +118,15 @@ function LeaderboardTable({ entries, period }: { entries: LeaderboardEntry[]; pe
                       <AvatarFallback className="text-xs">{initials(entry.displayName)}</AvatarFallback>
                     </Avatar>
                     <div className="flex flex-col">
-                      <span className="font-semibold text-foreground">{entry.displayName}</span>
+                      <span className="font-semibold text-foreground">
+                        {entry.displayName.split(" ").slice(0, 1).join(" ")}
+                        {entry.displayName.split(" ").length > 1 && (
+                          <>
+                            <br />
+                            {entry.displayName.split(" ").slice(1).join(" ")}
+                          </>
+                        )}
+                      </span>
                       <span className={`mt-0.5 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${rankStyleForLevel(levelForXp(entry.xp)).badgeClass}`}>
                         {rankStyleForLevel(levelForXp(entry.xp)).title} · Lv.{levelForXp(entry.xp)}
                       </span>

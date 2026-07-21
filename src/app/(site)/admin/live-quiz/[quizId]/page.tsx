@@ -2,12 +2,14 @@
 
 import { use, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, collection, onSnapshot, query, orderBy, limit } from "firebase/firestore";
 import { clientDb } from "@/lib/firebase/client";
+import Image from "next/image";
 import {
   ArrowLeft,
   CheckCircle2,
   Clock,
+  Coins,
   Crown,
   Eye,
   EyeOff,
@@ -40,6 +42,7 @@ export default function AdminLiveQuizStagePage({
   const [session, setSession] = useState<LiveQuizSession | null>(null);
   const [questions, setQuestions] = useState<any[]>([]);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [answerKey, setAnswerKey] = useState<Record<string, { correct: number[]; explanation: string }> | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
   // Fetch initial data
@@ -50,7 +53,7 @@ export default function AdminLiveQuizStagePage({
         setQuizData(res.data.quiz);
         setSession(res.data.session);
         setQuestions(res.data.questions || []);
-        setLeaderboard(res.data.leaderboard || []);
+        setAnswerKey(res.data.answerKey || null);
       }
     } catch {
       toast.error("Failed to load live quiz data.");
@@ -70,8 +73,6 @@ export default function AdminLiveQuizStagePage({
       (snapshot) => {
         if (snapshot.exists()) {
           setSession(snapshot.data() as LiveQuizSession);
-          // Refresh leaderboard on question update
-          loadData();
         }
       },
       (err) => {
@@ -81,7 +82,22 @@ export default function AdminLiveQuizStagePage({
     return () => unsub();
   }, [quizId]);
 
-  const handleControl = async (action: "start" | "setQuestion" | "toggleAnswer" | "end", questionIndex?: number) => {
+  // Subscribe to live leaderboard (answers collection) in real-time
+  useEffect(() => {
+    const q = query(
+      collection(clientDb(), "liveQuizSessions", quizId, "answers"),
+      orderBy("totalCoins", "desc"),
+      limit(20)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      setLeaderboard(snap.docs.map(d => ({ uid: d.id, ...d.data() })));
+    }, (err) => {
+      console.error("Leaderboard snapshot error:", err);
+    });
+    return () => unsub();
+  }, [quizId]);
+
+  const handleControl = async (action: "start" | "setQuestion" | "toggleAnswer" | "end" | "relaunch", questionIndex?: number) => {
     setActionLoading(true);
     try {
       const res = await postJson<{ session: LiveQuizSession }>(
@@ -114,6 +130,7 @@ export default function AdminLiveQuizStagePage({
       {/* Top stage header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-6">
         <div>
+          <Image src="/uizera-logo.png" alt="UiZera" width={100} height={34} className="h-8 w-auto object-contain mb-4" />
           <Button variant="ghost" size="sm" onClick={() => router.push("/admin/quizzes")} className="gap-2 mb-2">
             <ArrowLeft className="h-4 w-4" /> Admin Quizzes
           </Button>
@@ -121,6 +138,9 @@ export default function AdminLiveQuizStagePage({
             <h1 className="font-display text-3xl font-extrabold">{quizData?.title || "Live Quiz"}</h1>
             <Badge className="bg-uipath-orange text-white uppercase text-xs animate-pulse">
               Live Stage
+            </Badge>
+            <Badge variant="outline" className="gap-1.5 bg-background">
+              <Users className="h-3.5 w-3.5" /> {leaderboard.length} Participants
             </Badge>
           </div>
         </div>
@@ -144,6 +164,16 @@ export default function AdminLiveQuizStagePage({
               className="gap-2 font-bold"
             >
               <StopCircle className="h-4 w-4" /> End Live Stage
+            </Button>
+          )}
+
+          {session?.status === "ended" && (
+            <Button
+              onClick={() => handleControl("relaunch")}
+              disabled={actionLoading}
+              className="gap-2 bg-brand-500 hover:bg-brand-600 text-white font-bold"
+            >
+              <RotateCcw className="h-4 w-4" /> Relaunch Quiz
             </Button>
           )}
         </div>
@@ -198,17 +228,26 @@ export default function AdminLiveQuizStagePage({
                   <div className="mt-6 grid gap-3 sm:grid-cols-2">
                     {currentQ.options?.map((opt: string, oIdx: number) => {
                       const isRevealed = session?.revealAnswer;
+                      const isCorrect = answerKey?.[currentQ.id]?.correct?.includes(oIdx);
+                      
                       return (
                         <div
                           key={oIdx}
                           className={`flex items-center justify-between rounded-xl border p-4 font-medium transition-all ${
-                            isRevealed
+                            isRevealed && isCorrect
                               ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold"
                               : "bg-card"
                           }`}
                         >
-                          <span>{opt}</span>
-                          {isRevealed && <CheckCircle2 className="h-5 w-5 text-emerald-500" />}
+                          <div className="flex items-center gap-2">
+                            <span>{opt}</span>
+                            {isCorrect && (
+                              <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 text-[10px] px-1.5 py-0 border-emerald-500/20">
+                                ✓ Correct
+                              </Badge>
+                            )}
+                          </div>
+                          {isRevealed && isCorrect && <CheckCircle2 className="h-5 w-5 text-emerald-500" />}
                         </div>
                       );
                     })}
@@ -268,20 +307,32 @@ export default function AdminLiveQuizStagePage({
                   Waiting for participant submissions...
                 </p>
               ) : (
-                leaderboard.map((item, idx) => (
-                  <div
-                    key={item.uid}
-                    className="flex items-center justify-between rounded-xl border bg-muted/20 p-3 text-xs"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold font-mono text-muted-foreground">#{idx + 1}</span>
-                      <span className="font-semibold text-foreground truncate max-w-[120px]">
-                        {item.displayName}
-                      </span>
+                leaderboard.map((item, idx) => {
+                  const currentEarned = currentQ?.id ? item.answers?.[currentQ.id]?.coinsEarned : 0;
+                  return (
+                    <div
+                      key={item.uid}
+                      className="flex items-center justify-between rounded-xl border bg-muted/20 p-3 text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold font-mono text-muted-foreground">#{idx + 1}</span>
+                        <span className="font-semibold text-foreground truncate max-w-[120px]">
+                          {item.displayName || "Anonymous"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {currentEarned > 0 && (
+                          <span className="font-mono text-emerald-500 font-bold text-[10px]">
+                            +{currentEarned}
+                          </span>
+                        )}
+                        <span className="font-mono font-bold text-amber-500 flex items-center gap-1">
+                          {item.totalCoins || 0} <Coins className="h-3 w-3" />
+                        </span>
+                      </div>
                     </div>
-                    <span className="font-mono font-bold text-amber-500">{item.score} pts</span>
-                  </div>
-                ))
+                  );
+                })
               )}
             </CardContent>
           </Card>

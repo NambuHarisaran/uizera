@@ -45,25 +45,36 @@ export async function GET(
       };
     });
 
-    // Fetch attempts for live stage leaderboard
-    const attemptsSnap = await db
-      .collection("quizAttempts")
-      .where("quizId", "==", quizId)
+    // Fetch live answers leaderboard
+    const answersSnap = await db
+      .collection('liveQuizSessions')
+      .doc(quizId)
+      .collection('answers')
+      .orderBy('totalCoins', 'desc')
+      .limit(20)
       .get();
 
-    const leaderboard = attemptsSnap.docs
-      .map((d) => {
-        const data = d.data();
-        return {
-          uid: data.uid,
-          displayName: data.displayName || "Participant",
-          score: data.score || 0,
-          maxScore: data.maxScore || 100,
-          completedAt: data.completedAt?.toMillis?.() || 0,
-        };
-      })
-      .sort((a, b) => b.score - a.score || a.completedAt - b.completedAt)
-      .slice(0, 10);
+    const leaderboard = answersSnap.docs.map((d) => {
+      const data = d.data();
+      return {
+        uid: data.uid,
+        displayName: data.displayName || 'Participant',
+        photoURL: data.photoURL || null,
+        score: data.totalCoins || 0,
+        answers: data.answers || {},
+      };
+    });
+
+    // Include answer key for admin (check role)
+    const userSnap = await db.collection('users').doc(user.uid).get();
+    const userRole = userSnap.data()?.role;
+    let answerKey: Record<string, { correct: number[]; explanation: string }> | null = null;
+    if (userRole === 'admin' || userRole === 'super_admin') {
+      const keySnap = await db.collection('quizzes').doc(quizId).collection('answerKey').doc('main').get();
+      if (keySnap.exists) {
+        answerKey = keySnap.data()?.answers ?? null;
+      }
+    }
 
     return jsonOk({
       quiz: { id: quizSnap.id, ...quizSnap.data() },
@@ -72,6 +83,7 @@ export async function GET(
       currentQuestion: questions[session.currentQuestionIndex] || null,
       leaderboard,
       userUid: user.uid,
+      answerKey,
     });
   });
 }

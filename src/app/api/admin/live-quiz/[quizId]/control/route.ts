@@ -7,7 +7,7 @@ import { audit } from "@/lib/server/audit";
 export const runtime = "nodejs";
 
 const controlSchema = z.object({
-  action: z.enum(["start", "setQuestion", "toggleAnswer", "end"]),
+  action: z.enum(["start", "setQuestion", "toggleAnswer", "end", "relaunch"]),
   questionIndex: z.number().int().min(0).optional(),
 });
 
@@ -77,6 +77,22 @@ export async function POST(
         },
         { merge: true }
       );
+    } else if (action === "relaunch") {
+      await quizRef.update({ status: "live", mode: "live" });
+      await sessionRef.set({
+        quizId,
+        quizTitle: quizData.title,
+        status: "waiting",
+        currentQuestionIndex: 0,
+        questionStartAtMs: Date.now(),
+        questionDurationSeconds: quizData.durationSeconds || 30,
+        revealAnswer: false,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      const answersSnap = await db.collection("liveQuizSessions").doc(quizId).collection("answers").get();
+      const batch = db.batch();
+      answersSnap.docs.forEach((d) => batch.delete(d.ref));
+      if (answersSnap.docs.length > 0) await batch.commit();
     }
 
     await audit({

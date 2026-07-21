@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bot, ChevronDown, Coins, Crown, LayoutDashboard, LogOut, Menu, User, X } from "lucide-react";
+import Image from "next/image";
+import { ChevronDown, Coins, Crown, LayoutDashboard, LogOut, Menu, User, X } from "lucide-react";
 import { useAuth } from "@/components/providers/auth-provider";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -56,12 +57,14 @@ export function Navbar() {
     >
       <nav className="container flex h-16 items-center justify-between gap-4">
         <Link href="/" className="flex items-center gap-2.5 font-display text-lg font-bold">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-uipath-orange text-white shadow-lg shadow-brand-500/30 transition-transform duration-300 hover:rotate-6">
-            <Bot className="h-5 w-5" />
-          </span>
-          <span>
-            UI <span className="text-gradient">Zera</span>
-          </span>
+          <Image
+            src="/uizera-logo.png"
+            alt="UiZera Logo"
+            width={120}
+            height={40}
+            className="h-9 w-auto object-contain"
+            priority
+          />
         </Link>
 
         <div className="hidden items-center gap-1 lg:flex">
@@ -183,7 +186,7 @@ export function Navbar() {
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link href="/achievements">
-                      <Bot /> Achievements & Level
+                      Achievements & Level
                     </Link>
                   </DropdownMenuItem>
                   {isAdmin && (

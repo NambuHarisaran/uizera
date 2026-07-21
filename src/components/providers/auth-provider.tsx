@@ -126,18 +126,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithGoogle = useCallback(async () => {
     const cred = await signInWithPopup(clientAuth(), googleProvider());
-    const idToken = await cred.user.getIdToken(true);
-    const res = await fetch("/api/auth/session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idToken }),
+    // Show user as signed in immediately with data from Google popup
+    setUser(fallbackProfile(cred.user));
+    setLoading(false);
+    // Exchange token for session cookie in the background
+    cred.user.getIdToken(true).then(async (idToken) => {
+      try {
+        const res = await fetch("/api/auth/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ idToken }),
+        });
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as { error?: string } | null;
+          console.error("Session exchange failed:", body?.error);
+        }
+        router.refresh();
+      } catch (err) {
+        console.error("Session exchange error:", err);
+      }
     });
-    if (!res.ok) {
-      await firebaseSignOut(clientAuth());
-      const body = (await res.json().catch(() => null)) as { error?: string } | null;
-      throw new Error(body?.error ?? "Sign-in failed. Please try again.");
-    }
-    router.refresh();
   }, [router]);
 
   const signOut = useCallback(async () => {

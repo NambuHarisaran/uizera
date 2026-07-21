@@ -78,7 +78,7 @@ function TestimonialStack() {
             }}
             transition={{ type: "spring", stiffness: 260, damping: 24 }}
             style={{ zIndex: testimonials.length - stackIndex }}
-            className={`absolute inset-0 flex flex-col border border-uipath-text/15 bg-white p-7 shadow-card dark:border-border dark:bg-card ${
+            className={`absolute inset-0 flex flex-col overflow-hidden border border-uipath-text/15 bg-white p-7 shadow-card dark:border-border dark:bg-card ${
               isTop ? "cursor-grab active:cursor-grabbing" : "pointer-events-none"
             }`}
           >
@@ -93,7 +93,7 @@ function TestimonialStack() {
               )}
             </div>
 
-            <blockquote className="flex-1 text-sm font-medium leading-relaxed text-uipath-mutedText dark:text-muted-foreground sm:text-base">
+            <blockquote className="line-clamp-4 flex-1 text-sm font-medium leading-relaxed text-uipath-mutedText dark:text-muted-foreground sm:text-base">
               &ldquo;{t.quote}&rdquo;
             </blockquote>
 
@@ -105,7 +105,7 @@ function TestimonialStack() {
                 <p className="font-display text-sm font-bold text-uipath-text dark:text-foreground">
                   {t.name}
                 </p>
-                <p className="font-mono text-[11px] font-semibold uppercase tracking-wider text-uipath-orange">
+                <p className="font-mono text-[11px] font-semibold uppercase tracking-wider text-orange-700 dark:text-uipath-orange">
                   {t.role}
                 </p>
               </div>

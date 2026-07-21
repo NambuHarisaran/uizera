@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Spinner } from "@/components/shared/spinner";
+import { EmptyState } from "@/components/shared/empty-state";
 import { useAuth } from "@/components/providers/auth-provider";
 import { useLeaderboard } from "@/lib/hooks";
 import { formatCoins, initials, levelForXp, rankStyleForLevel } from "@/lib/utils";
@@ -62,7 +63,7 @@ export function ChampionsContent() {
   return (
     <div className="pb-24 space-y-12">
       {/* Hero Header */}
-      <section className="hero-glow relative overflow-hidden py-16 border-b">
+      <section className="hero-glow relative overflow-hidden py-24 border-b">
         <div className="bg-grid pointer-events-none absolute inset-0 opacity-20" />
         <div className="container relative max-w-5xl">
           <motion.div
@@ -119,29 +120,29 @@ export function ChampionsContent() {
               <Spinner className="h-8 w-8 text-amber-500" />
             </div>
           ) : champions.length === 0 ? (
-            <Card className="p-8 text-center bg-card/60">
-              <Sparkles className="mx-auto mb-3 h-10 w-10 text-amber-500/60" />
-              <h3 className="font-display text-lg font-bold">No Champions Yet!</h3>
-              <p className="text-xs text-muted-foreground max-w-md mx-auto mt-1">
-                Be among the first 10 members to reach Level 40+ to unlock your entry into the UiPath Student Developer Champions Hall of Fame.
-              </p>
-            </Card>
+            <EmptyState
+              icon={Sparkles}
+              title="No Champions Yet!"
+              description="Be among the first 10 members to reach Level 40+ to unlock your entry into the UiPath Student Developer Champions Hall of Fame."
+            />
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
               {champions.map((champ, idx) => (
-                <Card key={champ.uid} className="border-2 border-amber-500/40 bg-gradient-to-tr from-amber-500/5 to-transparent p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-lg font-black text-amber-500">#{idx + 1}</span>
-                    <Avatar className="h-10 w-10 border-2 border-amber-500">
+                <Card key={champ.uid} className="border-2 border-amber-500/40 bg-gradient-to-tr from-amber-500/5 to-transparent p-4 flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="shrink-0 font-mono text-lg font-black text-amber-500">#{idx + 1}</span>
+                    <Avatar className="h-10 w-10 shrink-0 border-2 border-amber-500">
                       <AvatarImage src={champ.photoURL ?? undefined} />
                       <AvatarFallback>{initials(champ.displayName)}</AvatarFallback>
                     </Avatar>
-                    <div>
-                      <h4 className="font-bold text-sm text-foreground">{champ.displayName}</h4>
-                      <p className="text-xs text-muted-foreground">Level {levelForXp(champ.xp)} · {formatCoins(champ.xp)} XP</p>
+                    <div className="min-w-0">
+                      <h4 className="truncate font-bold text-sm text-foreground" title={champ.displayName}>
+                        {champ.displayName}
+                      </h4>
+                      <p className="truncate text-xs text-muted-foreground">Level {levelForXp(champ.xp)} · {formatCoins(champ.xp)} XP</p>
                     </div>
                   </div>
-                  <Badge className="bg-amber-500 text-black font-extrabold text-xs">
+                  <Badge className="shrink-0 bg-amber-500 text-black font-extrabold text-xs">
                     Champion
                   </Badge>
                 </Card>

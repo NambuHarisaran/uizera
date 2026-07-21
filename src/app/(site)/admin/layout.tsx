@@ -83,7 +83,7 @@ export default function AdminLayout({
                   key={link.href}
                   href={link.href}
                   className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     isActive
                       ? "bg-brand-500/10 text-brand-600 dark:text-brand-400"
                       : "text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -98,10 +98,11 @@ export default function AdminLayout({
         </div>
       </aside>
 
-      {/* Mobile nav */}
+      {/* Mobile nav — horizontally scrollable so all sections stay reachable
+          instead of permanently hiding the tail end of the list. */}
       <div className="fixed bottom-0 left-0 right-0 z-30 border-t bg-background/95 backdrop-blur-xl lg:hidden">
-        <nav className="container flex items-center justify-around py-2">
-          {sidebarLinks.slice(0, 5).map((link) => {
+        <nav className="container flex items-center gap-1 overflow-x-auto py-2">
+          {sidebarLinks.map((link) => {
             const Icon = link.icon;
             const isActive =
               pathname === link.href ||
@@ -111,7 +112,7 @@ export default function AdminLayout({
                 key={link.href}
                 href={link.href}
                 className={cn(
-                  "flex flex-col items-center gap-0.5 rounded-lg p-2 text-[10px] font-medium transition-colors",
+                  "flex shrink-0 flex-col items-center gap-0.5 rounded-lg p-2 text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   isActive
                     ? "text-brand-500"
                     : "text-muted-foreground"

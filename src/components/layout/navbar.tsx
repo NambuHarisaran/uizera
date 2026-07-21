@@ -18,7 +18,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { NAV_LINKS, SITE } from "@/lib/constants";
 import { cn, formatCoins, initials, rankStyleForLevel } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -165,7 +164,10 @@ export function Navbar() {
                 {formatCoins(user.coins)}
               </div>
               <DropdownMenu>
-                <DropdownMenuTrigger className="rounded-full outline-none ring-brand-500 focus-visible:ring-2">
+                <DropdownMenuTrigger
+                  aria-label="Open user menu"
+                  className="rounded-full outline-none ring-brand-500 focus-visible:ring-2"
+                >
                   <Avatar className="h-8 w-8 sm:h-9 sm:w-9 border-2 border-brand-500/40">
                     <AvatarImage src={user.photoURL ?? undefined} alt={user.displayName} />
                     <AvatarFallback>{initials(user.displayName)}</AvatarFallback>
@@ -173,7 +175,7 @@ export function Navbar() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuLabel className="flex flex-col">
-                    <span>{user.displayName}</span>
+                    <span className="truncate" title={user.displayName}>{user.displayName}</span>
                     <span className="text-xs font-normal text-muted-foreground">
                       Level {user.level} · <span className="font-semibold text-foreground">{rankStyleForLevel(user.level).title}</span>
                     </span>
@@ -228,12 +230,14 @@ export function Navbar() {
           >
             <div className="container flex flex-col gap-1 py-4">
               {user && (
-                <div className="mb-2 rounded-xl border bg-card/60 p-3 text-xs flex items-center justify-between">
-                  <div>
-                    <p className="font-bold text-foreground">{user.displayName}</p>
-                    <p className="text-muted-foreground">Level {user.level} ({rankStyleForLevel(user.level).title}) · {formatCoins(user.xp)} XP</p>
+                <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border bg-card/60 p-3 text-xs">
+                  <div className="min-w-0">
+                    <p className="truncate font-bold text-foreground" title={user.displayName}>
+                      {user.displayName}
+                    </p>
+                    <p className="truncate text-muted-foreground">Level {user.level} ({rankStyleForLevel(user.level).title}) · {formatCoins(user.xp)} XP</p>
                   </div>
-                  <div className="flex items-center gap-1 font-bold text-amber-500">
+                  <div className="flex shrink-0 items-center gap-1 font-bold text-amber-500">
                     <Coins className="h-4 w-4" /> {formatCoins(user.coins)}
                   </div>
                 </div>

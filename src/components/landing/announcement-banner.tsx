@@ -58,7 +58,7 @@ export function AnnouncementBanner() {
             </Link>
             <button
               onClick={() => setDismissed(true)}
-              className="rounded-lg p-1 text-muted-foreground hover:bg-background/50 hover:text-foreground transition-colors"
+              className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-background/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Dismiss banner"
             >
               <X className="h-4 w-4" />

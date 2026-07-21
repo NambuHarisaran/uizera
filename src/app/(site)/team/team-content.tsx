@@ -5,6 +5,7 @@ import { Linkedin, Mail, Trophy, Users } from "lucide-react";
 import { SectionHeading } from "@/components/shared/section-heading";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Spinner } from "@/components/shared/spinner";
+import { EmptyState } from "@/components/shared/empty-state";
 import { useTeam } from "@/lib/hooks";
 import { initials } from "@/lib/utils";
 import type { TeamMember, TeamSection } from "@/types";
@@ -75,10 +76,14 @@ function MemberCard({ member, highlight = false }: { member: TeamMember; highlig
         </AvatarFallback>
       </Avatar>
 
-      <h3 className="font-display text-base font-semibold">{member.name}</h3>
-      <p className="mt-0.5 text-sm text-brand-500">{member.role}</p>
+      <h3 className="w-full truncate font-display text-base font-semibold" title={member.name}>
+        {member.name}
+      </h3>
+      <p className="mt-0.5 w-full truncate text-sm text-brand-500" title={member.role}>
+        {member.role}
+      </p>
       {member.department && (
-        <p className="mt-0.5 text-xs text-muted-foreground">{member.department}</p>
+        <p className="mt-0.5 w-full truncate text-xs text-muted-foreground">{member.department}</p>
       )}
       {member.bio && (
         <p className="mt-3 line-clamp-3 text-xs leading-relaxed text-muted-foreground">
@@ -214,10 +219,11 @@ export function TeamContent() {
           })}
 
           {(!data?.items || data.items.length === 0) && (
-            <div className="py-12 text-center text-muted-foreground">
-              <Users className="mx-auto mb-4 h-12 w-12 opacity-30" />
-              <p>Team members will appear here once added by an admin.</p>
-            </div>
+            <EmptyState
+              icon={Users}
+              title="No team members yet"
+              description="Team members will appear here once added by an admin."
+            />
           )}
         </div>
       )}

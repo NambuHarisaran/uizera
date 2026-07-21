@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Spinner } from "@/components/shared/spinner";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useLeaderboard } from "@/lib/hooks";
-import { formatCoins, initials, levelForXp, rankStyleForLevel } from "@/lib/utils";
+import { formatCoins, initials, levelForXp, rankStyleForLevel, shortName } from "@/lib/utils";
 import { BADGE_MAP } from "@/lib/constants";
 import type { LeaderboardEntry, LeaderboardPeriod } from "@/types";
 
@@ -33,7 +33,7 @@ function TopThreeCards({ entries, period }: { entries: LeaderboardEntry[]; perio
   const displayOrder = top.length >= 3 ? [top[1], top[0], top[2]] : top;
 
   return (
-    <div className="mb-12 flex items-end justify-center gap-4 sm:gap-6">
+    <div className="mb-12 flex items-end justify-center gap-3 sm:gap-6">
       {displayOrder.map((entry, idx) => {
         if (!entry) return null;
         const actualRank = top.indexOf(entry);
@@ -47,7 +47,7 @@ function TopThreeCards({ entries, period }: { entries: LeaderboardEntry[]; perio
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: idx * 0.1 }}
-            className={`flex flex-col items-center ${isFirst ? "mb-4" : ""}`}
+            className={`flex w-24 flex-col items-center text-center sm:w-32 ${isFirst ? "mb-4" : ""}`}
           >
             <div className={`relative mb-3 rounded-2xl border p-4 ${config.bg} ${isFirst ? "p-5" : ""}`}>
               <Icon className={`${config.color} ${isFirst ? "h-8 w-8" : "h-6 w-6"}`} />
@@ -56,21 +56,24 @@ function TopThreeCards({ entries, period }: { entries: LeaderboardEntry[]; perio
               <AvatarImage src={entry.photoURL ?? undefined} alt={entry.displayName} />
               <AvatarFallback className="font-display">{initials(entry.displayName)}</AvatarFallback>
             </Avatar>
-            <p className={`mt-2 font-display font-semibold ${isFirst ? "text-base" : "text-sm"} text-center`}>
-              {entry.displayName.split(" ").slice(0, 1).join(" ")}
-              {entry.displayName.split(" ").length > 1 && (
-                <>
-                  <br />
-                  {entry.displayName.split(" ").slice(1).join(" ")}
-                </>
-              )}
+            {/* Fixed-width column + a placeholder dept line keep every podium
+                card's coins row at the same height, regardless of name length
+                or whether department is set. */}
+            <p
+              className={`mt-2 w-full truncate font-display font-semibold ${isFirst ? "text-base" : "text-sm"}`}
+              title={entry.displayName}
+            >
+              {shortName(entry.displayName)}
             </p>
-            <Badge variant="outline" className={`mt-1 text-[10px] uppercase font-bold tracking-wider ${rankStyleForLevel(levelForXp(entry.xp)).badgeClass}`}>
+            <Badge
+              variant="outline"
+              className={`mt-1 max-w-full truncate text-[10px] uppercase font-bold tracking-wider ${rankStyleForLevel(levelForXp(entry.xp)).badgeClass}`}
+            >
               {rankStyleForLevel(levelForXp(entry.xp)).title} · Lv. {levelForXp(entry.xp)}
             </Badge>
-            {entry.department && (
-              <p className="mt-1 text-xs text-muted-foreground">{entry.department}</p>
-            )}
+            <p className="mt-1 h-4 w-full truncate text-xs text-muted-foreground">
+              {entry.department || " "}
+            </p>
             <div className="mt-1.5 flex items-center gap-1 text-sm font-bold text-amber-500">
               <Coins className="h-3.5 w-3.5" />
               {formatCoins(entry[coinField[period]] as number)}
@@ -111,29 +114,26 @@ function LeaderboardTable({ entries, period }: { entries: LeaderboardEntry[]; pe
                 className="border-b last:border-0 transition-colors hover:bg-muted/30"
               >
                 <td className="px-4 py-3 font-medium text-muted-foreground">{i + 4}</td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-9 w-9 border">
+                <td className="px-4 py-3 max-w-[10rem] sm:max-w-[14rem]">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Avatar className="h-9 w-9 shrink-0 border">
                       <AvatarImage src={entry.photoURL ?? undefined} />
                       <AvatarFallback className="text-xs">{initials(entry.displayName)}</AvatarFallback>
                     </Avatar>
-                    <div className="flex flex-col">
-                      <span className="font-semibold text-foreground">
-                        {entry.displayName.split(" ").slice(0, 1).join(" ")}
-                        {entry.displayName.split(" ").length > 1 && (
-                          <>
-                            <br />
-                            {entry.displayName.split(" ").slice(1).join(" ")}
-                          </>
-                        )}
+                    <div className="flex min-w-0 flex-col">
+                      <span
+                        className="truncate font-semibold text-foreground"
+                        title={entry.displayName}
+                      >
+                        {shortName(entry.displayName)}
                       </span>
-                      <span className={`mt-0.5 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${rankStyleForLevel(levelForXp(entry.xp)).badgeClass}`}>
+                      <span className={`mt-0.5 inline-flex w-fit max-w-full items-center gap-1 truncate rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${rankStyleForLevel(levelForXp(entry.xp)).badgeClass}`}>
                         {rankStyleForLevel(levelForXp(entry.xp)).title} · Lv.{levelForXp(entry.xp)}
                       </span>
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">
+                <td className="px-4 py-3 max-w-[8rem] truncate text-muted-foreground hidden sm:table-cell">
                   {entry.department ?? "—"}
                 </td>
                 <td className="px-4 py-3 hidden md:table-cell">

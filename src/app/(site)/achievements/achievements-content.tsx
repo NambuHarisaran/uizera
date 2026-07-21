@@ -48,13 +48,6 @@ const ICON_MAP: Record<string, any> = {
   Award,
 };
 
-const TIER_COLORS = {
-  bronze: "border-amber-700/40 bg-amber-700/10 text-amber-600 dark:text-amber-400",
-  silver: "border-slate-400/40 bg-slate-400/10 text-slate-600 dark:text-slate-300",
-  gold: "border-amber-400/50 bg-amber-400/15 text-amber-500 font-bold",
-  legend: "border-purple-500/50 bg-purple-500/15 text-purple-400 font-extrabold animate-pulse",
-};
-
 export function AchievementsContent() {
   const { data, isLoading } = useAchievements();
   const claimMutation = useClaimQuest();
@@ -88,7 +81,7 @@ export function AchievementsContent() {
   return (
     <div className="pb-24 space-y-12">
       {/* Hero Header */}
-      <section className="hero-glow relative overflow-hidden py-16 border-b">
+      <section className="hero-glow relative overflow-hidden py-24 border-b">
         <div className="bg-grid pointer-events-none absolute inset-0 opacity-20" />
         <div className="container relative max-w-5xl">
           <motion.div
@@ -197,6 +190,12 @@ export function AchievementsContent() {
                   <div className="flex justify-center py-12">
                     <Spinner className="h-8 w-8 text-brand-500" />
                   </div>
+                ) : quests.filter((q) => tab === "all" || q.category === tab).length === 0 ? (
+                  <EmptyState
+                    icon={Target}
+                    title="No quests here"
+                    description="Check back soon for new missions in this category."
+                  />
                 ) : (
                   <div className="grid gap-4 sm:grid-cols-2">
                     {quests
@@ -232,7 +231,7 @@ export function AchievementsContent() {
                               </div>
 
                               {q.claimed ? (
-                                <Badge className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 gap-1">
+                                <Badge variant="success" className="gap-1">
                                   <CheckCircle2 className="h-3 w-3" /> Claimed
                                 </Badge>
                               ) : (
@@ -315,7 +314,6 @@ export function AchievementsContent() {
             {filteredBadges.map((badge) => {
               const isUnlocked = unlockedBadges.has(badge.id);
               const IconComp = ICON_MAP[badge.icon] || Award;
-              const tierStyle = TIER_COLORS[badge.tier];
 
               return (
                 <Card
@@ -334,7 +332,10 @@ export function AchievementsContent() {
                     )}
                   </div>
 
-                  <Badge className={`mb-2 capitalize text-[10px] ${tierStyle}`}>
+                  <Badge
+                    variant={badge.tier}
+                    className={`mb-2 capitalize text-[10px] ${badge.tier === "legend" ? "animate-pulse" : ""}`}
+                  >
                     {badge.tier}
                   </Badge>
                   <h3 className="font-display text-sm font-bold truncate">

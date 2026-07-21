@@ -108,6 +108,12 @@ export function truncate(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }
 
+/** First name only, for tight UI spaces (leaderboards, stage rosters). Full name still belongs in a title attr. */
+export function shortName(name: string, maxLen = 16): string {
+  const first = name.trim().split(/\s+/)[0] ?? name;
+  return truncate(first, maxLen);
+}
+
 /** Fisher–Yates shuffle returning a NEW array (crypto-quality not required here). */
 export function shuffle<T>(arr: readonly T[]): T[] {
   const out = [...arr];

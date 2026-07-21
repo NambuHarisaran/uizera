@@ -58,6 +58,10 @@ export const quizUpsertSchema = z
     title: z.string().min(3).max(160),
     description: z.string().max(2000).default(""),
     coverImage: z.string().url().max(1024).nullable().optional(),
+    /** Website quizzes list publicly per status. Live-session quizzes never
+     * appear in the public list or the self-paced take-quiz flow — they're
+     * only reachable via the Live Stage link/QR the instructor shares. */
+    mode: z.enum(["async", "live"]).default("async"),
     status: z.enum(["draft", "scheduled", "live", "closed"]),
     startAt: z.number().int().positive(),
     endAt: z.number().int().positive(),
@@ -88,6 +92,12 @@ export const quizSubmitSchema = z.object({
     .refine((r) => Object.keys(r).length <= 100, {
       message: "too many answers",
     }),
+});
+
+export const liveQuizAnswerSchema = z.object({
+  questionId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
+  questionIndex: z.number().int().min(0),
+  selected: z.array(z.number().int().min(0).max(7)).max(8),
 });
 
 // ── Challenges ──────────────────────────────────────────────────────────────

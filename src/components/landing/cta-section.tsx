@@ -44,7 +44,7 @@ export function CtaSection() {
             Ready to Automate Your Career?
           </h2>
 
-          <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-white/85 sm:text-lg">
+          <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-white sm:text-lg">
             Join 100+ students who are already building the future with UiPath.
             Start earning coins, completing certifications, and climbing the
             leaderboard today.
@@ -76,7 +76,7 @@ export function CtaSection() {
             </Magnetic>
           </div>
 
-          <p className="mt-8 font-mono text-[10px] font-semibold uppercase tracking-[0.3em] text-white/60">
+          <p className="mt-8 font-mono text-[10px] font-semibold uppercase tracking-[0.3em] text-white/90">
             no fees · no experience needed · all departments welcome
           </p>
         </motion.div>

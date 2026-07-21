@@ -48,7 +48,7 @@ function AnimatedCounter({ value, suffix }: { value: number; suffix: string }) {
 
 export function StatsBar() {
   return (
-    <section className="relative bg-white py-14 dark:bg-card">
+    <section className="relative border-t border-uipath-text/10 bg-white py-24 dark:border-border dark:bg-card">
       <div className="container mx-auto max-w-6xl">
         <div className="grid grid-cols-2 md:grid-cols-4">
           {stats.map((stat, i) => {

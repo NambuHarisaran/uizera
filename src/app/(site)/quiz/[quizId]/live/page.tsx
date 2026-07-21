@@ -1,30 +1,38 @@
 "use client";
 
-import { use, useState, useEffect, useCallback } from "react";
+import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { doc, collection, onSnapshot, query, orderBy, limit } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { clientDb } from "@/lib/firebase/client";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
-import { CheckCircle2, Clock, Coins, Crown, Flame, Radio, Sparkles, Trophy, XCircle, Zap } from "lucide-react";
+import {
+  CheckCircle2,
+  Coins,
+  Radio,
+  Timer,
+  Trophy,
+  Users,
+  XCircle,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Spinner } from "@/components/shared/spinner";
 import { postJson, unwrap } from "@/lib/fetcher";
+import { shortName } from "@/lib/utils";
+import { OPTION_STYLES } from "@/lib/quiz-option-styles";
 import { useAuth } from "@/components/providers/auth-provider";
 import type { LiveQuizSession } from "@/types";
 
-// Helper for option colors
-const OPTION_STYLES = [
-  "border-l-4 border-l-blue-500 bg-blue-500/5 hover:bg-blue-500/10 data-[selected=true]:bg-blue-500/20 data-[selected=true]:border-blue-600 data-[selected=true]:ring-2 data-[selected=true]:ring-blue-500",
-  "border-l-4 border-l-orange-500 bg-orange-500/5 hover:bg-orange-500/10 data-[selected=true]:bg-orange-500/20 data-[selected=true]:border-orange-600 data-[selected=true]:ring-2 data-[selected=true]:ring-orange-500",
-  "border-l-4 border-l-emerald-500 bg-emerald-500/5 hover:bg-emerald-500/10 data-[selected=true]:bg-emerald-500/20 data-[selected=true]:border-emerald-600 data-[selected=true]:ring-2 data-[selected=true]:ring-emerald-500",
-  "border-l-4 border-l-purple-500 bg-purple-500/5 hover:bg-purple-500/10 data-[selected=true]:bg-purple-500/20 data-[selected=true]:border-purple-600 data-[selected=true]:ring-2 data-[selected=true]:ring-purple-500",
-];
+interface AnswerRecord {
+  selected: number[];
+  correct: boolean;
+  points: number;
+}
 
-export default function PlayerLiveQuizPage({
+export default function ParticipantLiveQuizPage({
   params,
 }: {
   params: Promise<{ quizId: string }>;
@@ -32,111 +40,114 @@ export default function PlayerLiveQuizPage({
   const { quizId } = use(params);
   const router = useRouter();
   const { user } = useAuth();
-  
+
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<LiveQuizSession | null>(null);
   const [questions, setQuestions] = useState<any[]>([]);
   const [quizData, setQuizData] = useState<any>(null);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
-  const [myAnswer, setMyAnswer] = useState<any>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState<Record<string, boolean>>({});
-  const [coinFeedback, setCoinFeedback] = useState<{ coins: number; correct: boolean; responseTimeMs?: number } | null>(null);
-  const [correctIndices, setCorrectIndices] = useState<Record<string, number[]>>({});
+  const [myAnswers, setMyAnswers] = useState<Record<string, AnswerRecord>>({});
+  const [myScore, setMyScore] = useState(0);
+  const [answeredCount, setAnsweredCount] = useState(0);
+  const [optionCounts, setOptionCounts] = useState<number[] | null>(null);
+  const [revealedCorrect, setRevealedCorrect] = useState<number[] | null>(null);
+  const [submittingQ, setSubmittingQ] = useState<string | null>(null);
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
-  // Initial fetch
-  useEffect(() => {
-    async function loadInitialData() {
-      try {
-        const res = await fetch(`/api/live-quiz/${quizId}`);
-        if (!res.ok) {
-          throw new Error("Failed to load initial data");
-        }
-        const data = await res.json();
-        setQuizData(data.quiz);
-        setSession(data.session);
-        setQuestions(data.questions);
-        
-        // Also setup listener for session
-        const sessionUnsub = onSnapshot(doc(clientDb(), "liveQuizSessions", quizId), (docSnap) => {
-          if (docSnap.exists()) {
-            setSession(docSnap.data() as LiveQuizSession);
-          }
-        });
-
-        // Setup listener for answers/leaderboard
-        const q = query(
-          collection(clientDb(), "liveQuizSessions", quizId, "answers"),
-          orderBy("totalCoins", "desc")
-        );
-        const leaderboardUnsub = onSnapshot(q, (snapshot) => {
-          const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-          setLeaderboard(docs);
-          if (user) {
-            const me = docs.find(d => d.id === user.uid);
-            if (me) setMyAnswer(me);
-          }
-        });
-
-        setLoading(false);
-        return () => {
-          sessionUnsub();
-          leaderboardUnsub();
-        };
-      } catch (err) {
-        console.error(err);
-        toast.error("Could not load quiz.");
-        router.push("/quiz");
-      }
-    }
-    if (user) {
-      loadInitialData();
-    }
-  }, [quizId, router, user]);
-
-  // Handle local state when question changes
-  useEffect(() => {
-    if (session?.currentQuestionIndex !== undefined) {
-      setCoinFeedback(null);
-    }
-  }, [session?.currentQuestionIndex]);
-
-  const submitAnswer = async (questionId: string, selectedIndex: number) => {
-    if (submitting || submitted[questionId] || session?.revealAnswer) return;
-    
-    setSubmitting(true);
-    setSubmitted(prev => ({ ...prev, [questionId]: true }));
-    
+  const loadData = async () => {
     try {
-      const res = await postJson(`/api/live-quiz/${quizId}/answer`, {
-        questionId,
-        selectedIndex,
-        answeredAtMs: Date.now(),
-      });
-      const result = unwrap(res) as any;
-      
-      setCoinFeedback({
-        coins: result.coinsEarned,
-        correct: result.correct,
-        responseTimeMs: result.responseTimeMs,
-      });
-      
-      if (result.correctIndices) {
-        setCorrectIndices(prev => ({ ...prev, [questionId]: result.correctIndices }));
+      const res = await fetch(`/api/live-quiz/${quizId}`).then((r) => r.json());
+      if (res.ok) {
+        setQuizData(res.data.quiz);
+        setSession(res.data.session);
+        setQuestions(res.data.questions || []);
+        setLeaderboard(res.data.leaderboard || []);
+        setMyAnswers(res.data.myAnswers || {});
+        setMyScore(res.data.myScore || 0);
+        setAnsweredCount(res.data.answeredCount || 0);
+        setOptionCounts(res.data.optionCounts ?? null);
+        setRevealedCorrect(res.data.revealedCorrect ?? null);
       }
-      
-      if (result.correct) {
-        toast.success(`Correct! +${result.coinsEarned} coins ⚡`);
-      } else {
-        toast.error("Incorrect. The correct answer will be revealed soon.");
-      }
-      
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err.message || "Failed to submit answer");
-      setSubmitted(prev => ({ ...prev, [questionId]: false }));
+    } catch (err) {
+      console.error("Failed to load live quiz data:", err);
     } finally {
-      setSubmitting(false);
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      loadData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quizId, user]);
+
+  // Real-time Firestore snapshot listener for INSTANT screen synchronization!
+  useEffect(() => {
+    if (!user) return;
+    const unsub = onSnapshot(
+      doc(clientDb(), "liveQuizSessions", quizId),
+      () => {
+        loadData();
+      },
+      (err) => {
+        console.error("Live sync snapshot error:", err);
+      }
+    );
+    return () => unsub();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quizId, user]);
+
+  const currentQIndex = session?.currentQuestionIndex ?? 0;
+  const currentQ = questions[currentQIndex];
+  const isEnded = session?.status === "ended";
+  const isWaiting = session?.status === "waiting";
+  const myAnswerForCurrent = currentQ ? myAnswers[currentQ.id] : undefined;
+  const isRevealed = Boolean(session?.revealAnswer);
+  const totalAnswered = optionCounts ? optionCounts.reduce((s, c) => s + c, 0) : 0;
+
+  // Per-question countdown, synced off the server's questionStartAtMs so
+  // every screen counts down from the same instant regardless of local clock.
+  useEffect(() => {
+    if (!session || session.status !== "active" || !session.questionStartAtMs) {
+      setTimeLeft(null);
+      return;
+    }
+    const durationMs = (session.questionDurationSeconds || 30) * 1000;
+    const tick = () => {
+      const remain = Math.max(
+        0,
+        Math.ceil((session.questionStartAtMs + durationMs - Date.now()) / 1000)
+      );
+      setTimeLeft(remain);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [session?.questionStartAtMs, session?.questionDurationSeconds, session?.status]);
+
+  const handleSelect = async (questionId: string, optionIdx: number) => {
+    if (myAnswers[questionId] || isRevealed || submittingQ) return;
+
+    setSubmittingQ(questionId);
+    try {
+      const res = await postJson<{ isCorrect: boolean; pointsEarned: number; totalScore: number }>(
+        `/api/live-quiz/${quizId}/answer`,
+        { questionId, questionIndex: currentQIndex, selected: [optionIdx] }
+      );
+      const data = unwrap(res);
+      setMyAnswers((prev) => ({
+        ...prev,
+        [questionId]: { selected: [optionIdx], correct: data.isCorrect, points: data.pointsEarned },
+      }));
+      setMyScore(data.totalScore);
+      toast.success(
+        data.isCorrect ? `Locked in! +${data.pointsEarned} coins ⚡` : "Locked in!"
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not submit your answer.");
+    } finally {
+      setSubmittingQ(null);
     }
   };
 
@@ -148,321 +159,247 @@ export default function PlayerLiveQuizPage({
     );
   }
 
-  if (!session) return null;
-
-  // Render Waiting Screen
-  if (session.status === "waiting") {
-    return (
-      <div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="relative w-full max-w-md"
-        >
-          <div className="absolute -inset-0.5 animate-pulse rounded-2xl bg-gradient-to-r from-brand-500 to-purple-500 opacity-20 blur" />
-          <Card className="relative rounded-2xl border-brand-100 shadow-xl">
-            <CardContent className="flex flex-col items-center p-12 text-center">
-              <Image 
-                src="/uizera-logo.png" 
-                alt="UiZera" 
-                width={160} 
-                height={54} 
-                className="mb-8"
-              />
-              <Spinner className="mb-6 h-10 w-10 text-brand-600" />
-              <h2 className="font-display mb-2 text-2xl font-bold">
-                Waiting for Instructor to Start
-              </h2>
-              <p className="text-muted-foreground">
-                Get ready! Your screen will sync automatically.
-              </p>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
-    );
-  }
-
-  // Render Ended Screen
-  if (session.status === "ended") {
-    const myRank = leaderboard.findIndex(u => u.id === user?.uid) + 1;
-    const correctCount = Object.values(myAnswer?.answers || {}).filter((a: any) => a.correct).length;
-    
-    return (
-      <div className="mx-auto flex max-w-3xl flex-col items-center p-4 py-12">
-        <Image 
-          src="/uizera-logo.png" 
-          alt="UiZera" 
-          width={160} 
-          height={54} 
-          className="mb-8"
-        />
-        <motion.div
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          className="mb-4 text-yellow-500"
-        >
-          <Trophy className="h-16 w-16 animate-bounce" />
-        </motion.div>
-        
-        <h2 className="font-display mb-8 text-4xl font-bold text-slate-900">
-          Live Quiz Complete! 🎉
-        </h2>
-
-        <div className="mb-12 grid w-full gap-4 md:grid-cols-3">
-          <Card className="bg-brand-50">
-            <CardContent className="flex flex-col items-center p-6 text-center">
-              <span className="text-sm font-medium text-brand-600 uppercase">Your Rank</span>
-              <span className="font-mono mt-2 text-4xl font-bold text-slate-900">
-                #{myRank > 0 ? myRank : "-"}
-              </span>
-            </CardContent>
-          </Card>
-          <Card className="bg-yellow-50">
-            <CardContent className="flex flex-col items-center p-6 text-center">
-              <span className="text-sm font-medium text-yellow-600 uppercase">Total Coins</span>
-              <span className="font-mono mt-2 flex items-center gap-2 text-4xl font-bold text-slate-900">
-                {myAnswer?.totalCoins || 0}
-                <Coins className="h-6 w-6 text-yellow-500" />
-              </span>
-            </CardContent>
-          </Card>
-          <Card className="bg-emerald-50">
-            <CardContent className="flex flex-col items-center p-6 text-center">
-              <span className="text-sm font-medium text-emerald-600 uppercase">Correct</span>
-              <span className="font-mono mt-2 text-4xl font-bold text-slate-900">
-                {correctCount}
-              </span>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="w-full">
-          <h3 className="font-display mb-6 flex items-center justify-center gap-2 text-2xl font-bold">
-            🏆 Final Leaderboard
-          </h3>
-          <div className="flex flex-col gap-3">
-            {leaderboard.slice(0, 10).map((player, idx) => (
-              <motion.div
-                key={player.id}
-                initial={{ x: 20, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{ delay: idx * 0.1 }}
-                className={`flex items-center justify-between rounded-2xl bg-white p-4 shadow-sm border ${player.id === user?.uid ? 'border-brand-500 ring-1 ring-brand-500' : 'border-slate-100'}`}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="font-mono flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-lg font-bold">
-                    {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `#${idx + 1}`}
-                  </div>
-                  <span className="font-medium text-foreground">{player.displayName}</span>
-                  {player.id === user?.uid && (
-                    <Badge variant="secondary" className="bg-brand-100 text-brand-700">You</Badge>
-                  )}
-                </div>
-                <div className="font-mono flex items-center gap-1 font-bold text-slate-900">
-                  {player.totalCoins} <Coins className="h-4 w-4 text-yellow-500" />
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-
-        <Button 
-          size="lg" 
-          className="mt-12 rounded-full"
-          onClick={() => router.push("/quiz")}
-        >
-          Back to All Quizzes
-        </Button>
-      </div>
-    );
-  }
-
-  // Active Screen
-  const currentIndex = session.currentQuestionIndex || 0;
-  const currentQuestion = questions[currentIndex];
-  
-  if (!currentQuestion) return null;
-  
-  const questionId = currentQuestion.id;
-  const hasSubmitted = submitted[questionId];
-  const myAnswerForQ = myAnswer?.answers?.[questionId];
-  const selectedIndex = myAnswerForQ?.selectedIndex;
-  
   return (
-    <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-3xl flex-col p-4 py-8">
-      {/* Top Bar */}
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-xl font-bold text-slate-900">
-            {quizData?.title}
-          </h1>
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <span>Q{currentIndex + 1} of {questions.length}</span>
-            <span className="flex items-center gap-1 text-red-500">
-              <Radio className="h-3 w-3 animate-pulse" /> LIVE
-            </span>
+    <div className="container max-w-3xl py-12 space-y-6">
+      {/* Header Badge */}
+      <div className="flex items-center justify-between rounded-xl border bg-card/80 backdrop-blur-md p-4 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-uipath-orange/15 text-uipath-orange">
+            <Radio className="h-5 w-5 animate-pulse" />
+          </div>
+          <div>
+            <h1 className="font-display text-lg font-bold">{quizData?.title || "Live Stage Quiz"}</h1>
+            <p className="text-xs text-muted-foreground">
+              {isEnded ? "Live Stage Ended" : `Question ${currentQIndex + 1} of ${questions.length}`}
+            </p>
           </div>
         </div>
-        
-        <div className="flex items-center gap-2 rounded-full bg-yellow-50 px-4 py-2 font-mono text-lg font-bold text-yellow-700">
-          <Coins className="h-5 w-5 text-yellow-500" />
-          {myAnswer?.totalCoins || 0}
-        </div>
-      </div>
 
-      {/* Question Prompt */}
-      <div className="mb-10 text-center">
-        <h2 className="font-display text-3xl font-bold leading-tight text-slate-900 md:text-4xl">
-          {currentQuestion.prompt}
-        </h2>
-      </div>
-
-      {/* Options Grid */}
-      <div className="mb-8 grid gap-4 md:grid-cols-2">
-        {currentQuestion.options.map((opt: string, i: number) => {
-          const isSelected = selectedIndex === i;
-          const isCorrectOption = correctIndices[questionId]?.includes(i);
-          const showReveal = session.revealAnswer;
-          
-          let stateStyles = OPTION_STYLES[i % OPTION_STYLES.length];
-          let Icon = null;
-          
-          if (showReveal) {
-            if (isCorrectOption) {
-              stateStyles = "border-l-4 border-l-green-500 bg-green-500/20 ring-2 ring-green-500 font-bold";
-              Icon = <CheckCircle2 className="h-5 w-5 text-green-600" />;
-            } else if (isSelected) {
-              stateStyles = "border-l-4 border-l-red-500 bg-red-500/10 ring-2 ring-red-500 opacity-70";
-              Icon = <XCircle className="h-5 w-5 text-red-600" />;
-            } else {
-              stateStyles = "border-l-4 border-l-slate-300 bg-slate-50 opacity-50";
-            }
-          }
-
-          return (
-            <button
-              key={i}
-              data-selected={!showReveal && isSelected}
-              disabled={showReveal || hasSubmitted || submitting}
-              onClick={() => submitAnswer(questionId, i)}
-              className={`relative flex min-h-[5rem] w-full items-center justify-between rounded-xl p-4 text-left transition-all ${stateStyles} ${(!showReveal && !hasSubmitted) ? 'active:scale-95' : ''}`}
-            >
-              <span className="text-lg font-medium text-slate-800">{opt}</span>
-              {Icon && <span>{Icon}</span>}
-              {!showReveal && submitting && isSelected && (
-                <Spinner className="h-4 w-4 text-slate-400" />
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Feedback Banner Mid-Question */}
-      <AnimatePresence>
-        {hasSubmitted && !session.revealAnswer && coinFeedback && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className={`flex items-center justify-between rounded-xl p-4 ${
-              coinFeedback.correct ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-800 border border-red-200"
+        {!isEnded && !isWaiting && timeLeft !== null && (
+          <div
+            className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-mono text-sm font-bold ${
+              timeLeft <= 5
+                ? "border-red-500/40 bg-red-500/10 text-red-500 animate-pulse"
+                : "border-uipath-orange/40 bg-uipath-orange/10 text-uipath-orange"
             }`}
           >
-            <div className="flex items-center gap-3">
-              {coinFeedback.correct ? (
-                <CheckCircle2 className="h-6 w-6 text-green-600" />
-              ) : (
-                <XCircle className="h-6 w-6 text-red-600" />
-              )}
-              <div>
-                <p className="font-bold">
-                  {coinFeedback.correct 
-                    ? `Correct! +${coinFeedback.coins} coins ⚡` 
-                    : "Incorrect. The correct answer will be revealed soon."}
-                </p>
-                {coinFeedback.responseTimeMs && (
-                  <p className="flex items-center gap-1 text-sm opacity-80">
-                    <Clock className="h-3 w-3" />
-                    Answered in {(coinFeedback.responseTimeMs / 1000).toFixed(1)}s
-                  </p>
+            <Timer className="h-4 w-4" /> {timeLeft}s
+          </div>
+        )}
+
+        <Badge className="bg-uipath-orange text-white uppercase text-xs animate-pulse">
+          LIVE STAGE MODE
+        </Badge>
+      </div>
+
+      <AnimatePresence mode="wait">
+        {isEnded ? (
+          /* Live Stage Final Leaderboard Screen */
+          <motion.div
+            key="leaderboard"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+            className="space-y-6"
+          >
+            <Card className="border-t-4 border-t-amber-500 bg-card p-8 text-center shadow-xl">
+              <Trophy className="mx-auto mb-4 h-16 w-16 text-amber-500 animate-bounce" />
+              <h2 className="font-display text-3xl font-extrabold">Live Stage Leaderboard</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Final standings for {quizData?.title} · You scored{" "}
+                <span className="font-bold text-foreground flex items-center justify-center gap-1 mt-1">
+                  {myScore} <Coins className="h-4 w-4 text-amber-500" />
+                </span>
+              </p>
+
+              <div className="mt-8 space-y-3">
+                {leaderboard.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-6">No entries recorded.</p>
+                ) : (
+                  leaderboard.map((item, idx) => (
+                    <div
+                      key={item.uid}
+                      className={`flex items-center justify-between gap-3 rounded-2xl border p-4 transition-all ${
+                        idx === 0
+                          ? "border-amber-500/50 bg-amber-500/10 font-bold"
+                          : idx === 1
+                          ? "border-slate-400/40 bg-slate-400/10 font-semibold"
+                          : idx === 2
+                          ? "border-amber-700/40 bg-amber-700/10 font-semibold"
+                          : "bg-card/60"
+                      } ${item.uid === user?.uid ? "ring-2 ring-brand-500" : ""}`}
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="shrink-0 font-mono text-lg font-extrabold w-6 text-center">
+                          {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `#${idx + 1}`}
+                        </span>
+                        <span
+                          className="truncate font-display text-base text-foreground"
+                          title={item.displayName}
+                        >
+                          {shortName(item.displayName)}
+                        </span>
+                        {item.uid === user?.uid && (
+                          <Badge variant="secondary" className="bg-brand-500/10 text-brand-600">You</Badge>
+                        )}
+                      </div>
+                      <span className="shrink-0 font-mono text-base font-extrabold text-amber-500 flex items-center gap-1">
+                        {item.score} <Coins className="h-4 w-4" />
+                      </span>
+                    </div>
+                  ))
                 )}
               </div>
-            </div>
-            {coinFeedback.correct && (
-              <motion.div
-                initial={{ scale: 0, rotate: -180 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ type: "spring", bounce: 0.5 }}
-              >
-                <Coins className="h-8 w-8 text-yellow-500" />
-              </motion.div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </Card>
 
-      {/* Live Leaderboard (Revealed State) */}
-      <AnimatePresence>
-        {session.revealAnswer && (
+            <div className="flex justify-center">
+              <Button size="lg" onClick={() => router.push("/quiz")} className="rounded-full">
+                Back to All Quizzes
+              </Button>
+            </div>
+          </motion.div>
+        ) : isWaiting ? (
+          /* Waiting Screen */
           <motion.div
+            key="waiting"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             className="mt-8 flex flex-col gap-4 overflow-hidden"
           >
-            <div className="flex items-center gap-2 border-b pb-2">
-              <Trophy className="h-6 w-6 text-yellow-500" />
-              <h3 className="font-display text-xl font-bold text-slate-900">
-                Live Standings
-              </h3>
-            </div>
-            
-            <div className="flex flex-col gap-2">
-              {leaderboard.slice(0, 10).map((player, idx) => {
-                const thisQ = player.answers?.[questionId];
-                const gained = thisQ?.coinsEarned || 0;
-                
-                return (
-                  <motion.div
-                    key={player.id}
-                    initial={{ x: 20, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    transition={{ delay: idx * 0.05 }}
-                    className={`flex items-center justify-between rounded-2xl bg-white p-3 shadow-sm border ${
-                      player.id === user?.uid ? 'border-brand-500 bg-brand-50/30' : 'border-slate-100'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="font-mono flex h-8 w-8 items-center justify-center rounded-full bg-slate-50 font-bold text-slate-600">
-                        {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `#${idx + 1}`}
-                      </div>
-                      <span className="font-medium text-foreground">{player.displayName}</span>
-                      {player.id === user?.uid && (
-                        <Badge variant="outline" className="border-brand-200 text-brand-600 bg-white">You</Badge>
-                      )}
-                    </div>
-                    
-                    <div className="flex items-center gap-4">
-                      {gained > 0 && (
-                        <span className="font-mono text-sm font-bold text-green-500">
-                          +{gained}
-                        </span>
-                      )}
-                      <div className="font-mono flex w-16 items-center justify-end gap-1 font-bold text-slate-900">
-                        {player.totalCoins} <Coins className="h-4 w-4 text-yellow-500" />
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-            
-            {/* If user not in top 10 */}
-            {user && !leaderboard.slice(0, 10).find(p => p.id === user.uid) && (
-              <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-center text-sm text-slate-600">
-                Your current rank: <strong className="font-mono text-slate-900">#{leaderboard.findIndex(p => p.id === user.uid) + 1}</strong>
+            <Card className="p-12 text-center space-y-4">
+              <Image
+                src="/uizera-logo.png"
+                alt="UiZera"
+                width={160}
+                height={54}
+                className="mx-auto mb-4"
+              />
+              <Spinner className="mx-auto h-10 w-10 text-uipath-orange" />
+              <h2 className="font-display text-2xl font-bold">Waiting for Instructor to Start</h2>
+              <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                Get ready! The instructor will start the live stage quiz shortly. Your screen will sync automatically.
+              </p>
+            </Card>
+          </motion.div>
+        ) : (
+          /* Synchronized Question Screen */
+          <motion.div
+            key={`q-${currentQIndex}`}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.3 }}
+            className="space-y-6"
+          >
+            <Card className="border-2 border-brand-500/30 shadow-lg p-6 sm:p-8">
+              <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground mb-4">
+                <span>STAGE QUESTION {currentQIndex + 1} OF {questions.length}</span>
+                <span className="flex items-center gap-3">
+                  <span className="flex items-center gap-1 text-muted-foreground/80">
+                    <Users className="h-3.5 w-3.5" /> {answeredCount} answered
+                  </span>
+                  <span className="text-uipath-orange font-bold flex items-center gap-1">
+                    <Radio className="h-3.5 w-3.5" /> Synchronized
+                  </span>
+                </span>
               </div>
-            )}
+
+              <h2 className="font-display text-2xl font-extrabold sm:text-3xl leading-snug">
+                {currentQ?.prompt}
+              </h2>
+
+              <div className="mt-8 grid gap-3 sm:grid-cols-2">
+                {currentQ?.options?.map((opt: string, oIdx: number) => {
+                  const style = OPTION_STYLES[oIdx % OPTION_STYLES.length]!;
+                  const Icon = style.icon;
+                  const isSelected = myAnswerForCurrent?.selected.includes(oIdx);
+                  const isCorrectOption = revealedCorrect?.includes(oIdx);
+                  const showResult = isRevealed && revealedCorrect !== null;
+                  const pct =
+                    optionCounts && totalAnswered > 0
+                      ? Math.round(((optionCounts[oIdx] ?? 0) / totalAnswered) * 100)
+                      : null;
+
+                  return (
+                    <button
+                      key={oIdx}
+                      type="button"
+                      disabled={Boolean(myAnswerForCurrent) || isRevealed || submittingQ === currentQ.id}
+                      onClick={() => handleSelect(currentQ.id, oIdx)}
+                      className={`relative flex w-full items-center gap-3 overflow-hidden rounded-2xl border-2 p-4 text-left font-bold transition-all disabled:cursor-not-allowed ${
+                        showResult
+                          ? isCorrectOption
+                            ? "border-emerald-500 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                            : isSelected
+                            ? "border-red-500 bg-red-500/15 text-red-500"
+                            : "border-border/60 bg-card opacity-60"
+                          : isSelected
+                          ? `${style.border} ${style.bg} ${style.text} ring-2 ring-offset-2 ring-offset-background ring-brand-500/40`
+                          : "border-border/60 bg-card hover:border-brand-500/50 hover:bg-accent"
+                      }`}
+                    >
+                      {pct !== null && (
+                        <span
+                          className="absolute inset-y-0 left-0 bg-current opacity-10"
+                          style={{ width: `${pct}%` }}
+                        />
+                      )}
+                      <span
+                        className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                          showResult || isSelected ? "bg-black/10" : style.bg
+                        }`}
+                      >
+                        <Icon className={`h-4 w-4 ${showResult || isSelected ? "" : style.text}`} />
+                      </span>
+                      <span className="relative flex-1 text-base">{opt}</span>
+                      {pct !== null && <span className="relative shrink-0 font-mono text-sm">{pct}%</span>}
+                      {showResult && isCorrectOption && (
+                        <CheckCircle2 className="relative h-5 w-5 shrink-0 text-emerald-500" />
+                      )}
+                      {showResult && isSelected && !isCorrectOption && (
+                        <XCircle className="relative h-5 w-5 shrink-0 text-red-500" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {myAnswerForCurrent && !isRevealed && (
+                <div className="mt-6 rounded-xl border border-brand-500/30 bg-brand-500/10 p-4 text-brand-600 dark:text-brand-400 text-sm font-semibold flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5" /> Answer locked in — waiting for the instructor.
+                </div>
+              )}
+
+              {!myAnswerForCurrent && isRevealed && (
+                <div className="mt-6 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-600 dark:text-amber-400 text-sm font-semibold flex items-center gap-2">
+                  <XCircle className="h-5 w-5" /> Time's up — no answer submitted for this question.
+                </div>
+              )}
+
+              {isRevealed && myAnswerForCurrent && (
+                <div
+                  className={`mt-6 rounded-xl border p-4 text-sm font-semibold flex items-center gap-2 ${
+                    myAnswerForCurrent.correct
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                      : "border-red-500/30 bg-red-500/10 text-red-500"
+                  }`}
+                >
+                  {myAnswerForCurrent.correct ? (
+                    <>
+                      <CheckCircle2 className="h-5 w-5 animate-bounce" /> Correct! +{myAnswerForCurrent.points} coins ⚡
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="h-5 w-5" /> Not quite — 0 coins
+                    </>
+                  )}
+                </div>
+              )}
+            </Card>
+
+            <p className="text-center text-xs text-muted-foreground flex items-center justify-center gap-1">
+              Your live score: <span className="font-bold text-foreground">{myScore}</span> <Coins className="h-3.5 w-3.5 text-amber-500" />
+            </p>
           </motion.div>
         )}
       </AnimatePresence>

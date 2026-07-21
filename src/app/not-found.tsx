@@ -11,7 +11,7 @@ export default function NotFound() {
       <h1 className="font-display text-6xl font-bold text-gradient">404</h1>
       <p className="mt-3 max-w-md text-muted-foreground">
         This automation ran off the happy path. The page you are looking for does
-        not exist or has been moved.
+        not exist or has been moved. out
       </p>
       <Button asChild className="mt-8">
         <Link href="/">Back to home</Link>

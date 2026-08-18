@@ -34,23 +34,17 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 ---
 
-## Step 2: Enable Firebase Authentication & Firestore
+## Step 2: Enable Firebase Authentication & Firestore (Free Plan / Spark)
 
 1. **Authentication**: Go to [Firebase Console](https://console.firebase.google.com/) → **Build** → **Authentication** → **Get Started** → Enable **Google** sign-in.
 2. **Firestore Database**: Go to **Build** → **Firestore Database** → **Create Database** (Select default production mode and standard region).
-3. **Storage**: Go to **Build** → **Storage** → **Get Started**.
+*(Note: Firebase Storage is not needed on the free plan; challenge submissions use web links and media uses external URLs stored in Firestore).*
 
 ---
 
 ## Step 3: Deploy Firestore Security Rules & Indexes
 
 Run the deploy command from your terminal:
-
-```bash
-npx firebase deploy --only firestore:rules,storage
-```
-
-Or run via npm:
 
 ```bash
 npm run deploy:rules

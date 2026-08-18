@@ -94,6 +94,19 @@ export const quizSubmitSchema = z.object({
     }),
 });
 
+/** Used by PATCH /api/quiz/[quizId]/save-answer — debounced client auto-save. */
+export const saveAnswerSchema = z.object({
+  attemptId: z.string().min(1).max(200),
+  answers: z
+    .record(
+      z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
+      z.array(z.number().int().min(0).max(7)).max(8)
+    )
+    .refine((r) => Object.keys(r).length <= 100, {
+      message: "too many answers",
+    }),
+});
+
 export const liveQuizAnswerSchema = z.object({
   questionId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
   questionIndex: z.number().int().min(0),

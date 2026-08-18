@@ -25,15 +25,11 @@ export async function GET(
     const session = sessionSnap.data() || {
       quizId,
       status: "waiting",
+      viewState: "lobby",
       currentQuestionIndex: 0,
       revealAnswer: false,
     };
 
-    // Question docs are stored flat (order/prompt/options at the top level —
-    // see buildQuizDocs in lib/server/quiz.ts). A prior version of this route
-    // queried orderBy("publicDoc.order") and read d.data().publicDoc, a field
-    // that never existed on these docs; Firestore silently drops every doc
-    // missing the ordered field, so the stage always showed "0 questions".
     const questions = (await getQuizQuestions(quizId)).map((q) => ({
       id: q.id,
       type: q.type,
@@ -43,10 +39,26 @@ export async function GET(
       points: q.points,
     }));
 
-    // Single read of every participant's response doc — powers the
-    // leaderboard, "how many have answered" count, and (once revealed or for
-    // the host) the live answer-distribution bars.
-    const responsesSnap = await sessionRef.collection("responses").get();
+    // Read participants in lobby
+    const [responsesSnap, participantsSnap] = await Promise.all([
+      sessionRef.collection("responses").get(),
+      sessionRef.collection("participants").get(),
+    ]);
+
+    const participants = participantsSnap.docs
+      .map((d) => {
+        const p = d.data();
+        return {
+          uid: d.id,
+          displayName: (p.displayName as string) || "Participant",
+          photoURL: (p.photoURL as string) || null,
+          kicked: Boolean(p.kicked),
+        };
+      })
+      .filter((p) => !p.kicked);
+
+    const myParticipant = participantsSnap.docs.find((d) => d.id === user.uid)?.data();
+    const isKicked = Boolean(myParticipant?.kicked);
 
     const leaderboard = responsesSnap.docs
       .map((d) => {
@@ -60,14 +72,19 @@ export async function GET(
         };
       })
       .sort((a, b) => b.score - a.score)
-      .slice(0, 10);
+      .slice(0, 15);
 
-    // Include answer key for admin (check role)
-    const userSnap = await db.collection('users').doc(user.uid).get();
+    // Include answer key only for admin
+    const userSnap = await db.collection("users").doc(user.uid).get();
     const userRole = userSnap.data()?.role;
     let answerKey: Record<string, { correct: number[]; explanation: string }> | null = null;
-    if (userRole === 'admin' || userRole === 'super_admin') {
-      const keySnap = await db.collection('quizzes').doc(quizId).collection('answerKey').doc('main').get();
+    if (userRole === "admin" || userRole === "super_admin") {
+      const keySnap = await db
+        .collection("quizzes")
+        .doc(quizId)
+        .collection("answerKey")
+        .doc("main")
+        .get();
       if (keySnap.exists) {
         answerKey = keySnap.data()?.answers ?? null;
       }
@@ -107,8 +124,8 @@ export async function GET(
       }
 
       if (session.revealAnswer) {
-        const answerKey = await getAnswerKey(quizId);
-        revealedCorrect = answerKey[currentQ.id]?.correct ?? null;
+        const fullKey = await getAnswerKey(quizId);
+        revealedCorrect = fullKey[currentQ.id]?.correct ?? null;
       }
     }
 
@@ -118,6 +135,8 @@ export async function GET(
       questions,
       currentQuestion: currentQ,
       leaderboard,
+      participants,
+      isKicked,
       myAnswers,
       myScore,
       answeredCount,

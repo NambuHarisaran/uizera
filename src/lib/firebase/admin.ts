@@ -9,7 +9,6 @@ import "server-only";
 import { cert, getApps, initializeApp, type App } from "firebase-admin/app";
 import { getAuth, type Auth } from "firebase-admin/auth";
 import { FieldValue, getFirestore, Timestamp, type Firestore } from "firebase-admin/firestore";
-import { getStorage, type Storage } from "firebase-admin/storage";
 
 function getAdminApp(): App {
   const existing = getApps()[0];
@@ -28,7 +27,6 @@ function getAdminApp(): App {
 
   return initializeApp({
     credential: cert({ projectId, clientEmail, privateKey }),
-    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   });
 }
 
@@ -38,10 +36,6 @@ export function adminAuth(): Auth {
 
 export function adminDb(): Firestore {
   return getFirestore(getAdminApp());
-}
-
-export function adminStorage(): Storage {
-  return getStorage(getAdminApp());
 }
 
 export { FieldValue, Timestamp };

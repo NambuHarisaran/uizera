@@ -92,15 +92,25 @@ export interface Quiz {
   updatedAt: FireTimestamp;
 }
 
+export interface LiveParticipant {
+  uid: string;
+  displayName: string;
+  photoURL?: string | null;
+  joinedAt: FireTimestamp;
+  kicked?: boolean;
+}
+
 export interface LiveQuizSession {
   quizId: string;
   quizTitle: string;
   status: "waiting" | "active" | "ended";
+  viewState?: "question" | "leaderboard" | "lobby";
   currentQuestionIndex: number;
   questionStartAtMs: number;
   questionDurationSeconds: number;
   revealAnswer: boolean;
   participantCount?: number;
+  lastAnswerAt?: FireTimestamp;
   updatedAt: FireTimestamp;
 }
 

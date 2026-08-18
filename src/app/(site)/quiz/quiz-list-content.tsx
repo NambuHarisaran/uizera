@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
 import { Calendar, Clock, Coins, HelpCircle, Radio, Trophy, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/shared/spinner";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useQuizzes } from "@/lib/hooks";
 import { formatCoins, formatDuration, toDate } from "@/lib/utils";
@@ -19,6 +19,23 @@ const statusConfig: Record<QuizStatus, { label: string; variant?: "success"; col
   closed: { label: "Closed", color: "bg-muted text-muted-foreground" },
 };
 
+// ── Skeleton card ─────────────────────────────────────────────────────────────
+function QuizCardSkeleton() {
+  return (
+    <div className="animate-pulse rounded-2xl border bg-card overflow-hidden">
+      <div className="aspect-[16/9] bg-muted" />
+      <div className="p-6 space-y-3">
+        <div className="h-5 w-20 bg-muted rounded-full" />
+        <div className="h-6 w-3/4 bg-muted rounded-lg" />
+        <div className="h-4 w-full bg-muted rounded-lg" />
+        <div className="h-4 w-2/3 bg-muted rounded-lg" />
+        <div className="mt-4 h-10 w-full bg-muted rounded-xl" />
+      </div>
+    </div>
+  );
+}
+
+// ── Quiz card ─────────────────────────────────────────────────────────────────
 function QuizCard({ quiz }: { quiz: Quiz }) {
   const config = statusConfig[quiz.status];
   const startDate = toDate(quiz.startAt);
@@ -33,17 +50,21 @@ function QuizCard({ quiz }: { quiz: Quiz }) {
       className="group flex flex-col rounded-2xl border bg-card transition-all duration-300 hover:border-brand-500/30 hover:shadow-lg hover:shadow-brand-500/5"
     >
       {quiz.coverImage && (
-        <div className="aspect-[16/9] overflow-hidden rounded-t-2xl bg-muted">
-          <img
+        <div className="relative aspect-[16/9] overflow-hidden rounded-t-2xl bg-muted">
+          <Image
             src={quiz.coverImage}
             alt={quiz.title}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
           />
         </div>
       )}
       <div className="flex flex-1 flex-col p-6">
         <div className="mb-3 flex items-center gap-2">
-          <Badge variant={config.variant} className={config.color}>{config.label}</Badge>
+          <Badge variant={config.variant} className={config.color}>
+            {config.label}
+          </Badge>
           {quiz.status === "live" && (
             <span className="relative flex h-2.5 w-2.5">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
@@ -52,9 +73,13 @@ function QuizCard({ quiz }: { quiz: Quiz }) {
           )}
         </div>
 
-        <h3 className="mb-2 line-clamp-2 font-display text-lg font-semibold">{quiz.title}</h3>
+        <h3 className="mb-2 line-clamp-2 font-display text-lg font-semibold">
+          {quiz.title}
+        </h3>
         {quiz.description && (
-          <p className="mb-4 line-clamp-2 text-sm text-muted-foreground">{quiz.description}</p>
+          <p className="mb-4 line-clamp-2 text-sm text-muted-foreground">
+            {quiz.description}
+          </p>
         )}
 
         <div className="mt-auto space-y-2 text-sm text-muted-foreground">
@@ -86,7 +111,11 @@ function QuizCard({ quiz }: { quiz: Quiz }) {
               </Link>
             </Button>
             {quiz.status === "live" && (
-              <Button asChild variant="outline" className="gap-2 border-uipath-orange text-uipath-orange hover:bg-uipath-orange/10 font-bold">
+              <Button
+                asChild
+                variant="outline"
+                className="gap-2 border-uipath-orange text-uipath-orange hover:bg-uipath-orange/10 font-bold"
+              >
                 <Link href={`/quiz/${quiz.id}/live`}>
                   <Radio className="h-4 w-4 animate-pulse text-uipath-orange" /> Join Live Stage Quiz
                 </Link>
@@ -106,6 +135,7 @@ function QuizCard({ quiz }: { quiz: Quiz }) {
   );
 }
 
+// ── Main component ────────────────────────────────────────────────────────────
 export function QuizListContent() {
   const { data, isLoading } = useQuizzes();
   const quizzes = (data?.quizzes ?? []) as Quiz[];
@@ -141,8 +171,16 @@ export function QuizListContent() {
 
       <div className="container py-16">
         {isLoading ? (
-          <div className="flex justify-center py-12">
-            <Spinner className="h-8 w-8" />
+          /* Skeleton grid — much better UX than a centred spinner */
+          <div className="space-y-14">
+            <section>
+              <div className="mb-6 h-8 w-40 animate-pulse rounded-lg bg-muted" />
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <QuizCardSkeleton key={i} />
+                ))}
+              </div>
+            </section>
           </div>
         ) : quizzes.length === 0 ? (
           <EmptyState

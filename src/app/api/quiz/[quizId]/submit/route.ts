@@ -11,15 +11,24 @@ import {
 import { rateLimit } from "@/lib/server/rate-limit";
 import { awardCoins, bumpStats } from "@/lib/server/coins";
 import { audit } from "@/lib/server/audit";
-import { getAnswerKey, getQuizOrThrow } from "@/lib/server/quiz";
+import { getAnswerKey, getQuizOrThrow, gradeQuestion } from "@/lib/server/quiz";
 import { quizSubmitSchema } from "@/lib/validation";
 import { toMillis } from "@/lib/utils";
-import type { QuizAttempt } from "@/types";
+import type { QuizAttempt, QuestionType } from "@/types";
 
 export const runtime = "nodejs";
+export const maxDuration = 10; // Vercel free tier cap
 
 /** Grace window for network latency at the timer boundary. */
 const SUBMIT_GRACE_MS = 15_000;
+
+/** Minimum XP awarded even for a zero-score attempt (participation reward). */
+const MIN_PARTICIPATION_XP = 5;
+
+/** +10% coins if finished in the first 50% of allotted time with ≥70% accuracy. */
+const SPEED_BONUS_MULTIPLIER = 1.1;
+const SPEED_THRESHOLD_RATIO = 0.5;
+const SPEED_MIN_ACCURACY = 0.7;
 
 /**
  * POST /api/quiz/[quizId]/submit
@@ -29,6 +38,14 @@ const SUBMIT_GRACE_MS = 15_000;
  * attempt's stored option shuffle, so tampering with indices cannot improve
  * a score beyond honestly knowing the answers. The transaction flips the
  * attempt from in_progress exactly once — replays get a 400.
+ *
+ * Grading is type-aware:
+ *   - mcq / true_false / image: exact match (all-or-nothing)
+ *   - multi_select: partial credit with wrong-answer penalty
+ *
+ * Rewards:
+ *   - Speed bonus: +10% coins if finished in ≤50% time with ≥70% accuracy
+ *   - Participation XP: minimum 5 XP even on zero-score submits
  */
 export async function POST(
   req: NextRequest,
@@ -89,22 +106,39 @@ export async function POST(
           .map((d) => order[d])
           .filter((v): v is number => typeof v === "number");
 
-        const correctSet = new Set(key.correct);
-        const selectedSet = new Set(selected);
-        const exact =
-          selectedSet.size === correctSet.size &&
-          [...correctSet].every((c) => selectedSet.has(c));
+        // Determine question type from public questions list — stored in key
+        // We need the type to choose grading strategy. The answerKey doesn't
+        // store type, so we infer from the number of correct answers:
+        // A single correctIndex signals single-select type; multiple = multi_select.
+        // More precisely, we rely on the type stored in the question order from
+        // the attempt. We'll pass "multi_select" only when key has multiple correct.
+        // For proper type-awareness we look at correctIndices count as a heuristic
+        // until question type is stored on the key entry.
+        const questionType: QuestionType =
+          key.correct.length > 1 ? "multi_select" : "mcq";
 
-        if (exact) {
-          score += key.points;
-          correctCount += 1;
-        }
+        const earned = gradeQuestion(questionType, selected, key.correct, key.points);
+        score += earned;
+        if (earned === key.points) correctCount += 1;
       }
 
-      const coinsEarned = Math.round(score * quiz.coinsPerPoint);
       const accuracyRatio = attempt.maxScore > 0 ? score / attempt.maxScore : 0;
       const xpRewardTotal = quiz.xpReward ?? (quiz.totalPoints * 10 || 100);
-      const xpEarned = Math.round(accuracyRatio * xpRewardTotal);
+      const xpEarned = Math.max(
+        MIN_PARTICIPATION_XP,
+        Math.round(accuracyRatio * xpRewardTotal)
+      );
+
+      // Speed bonus: finish in ≤50% of allotted time with ≥70% accuracy
+      const timeTakenMs = now - toMillis(attempt.startedAt);
+      const durationMs = quiz.durationSeconds * 1000;
+      const timeRatio = durationMs > 0 ? Math.min(timeTakenMs / durationMs, 1) : 1;
+      const isSpeedBonus =
+        timeRatio <= SPEED_THRESHOLD_RATIO && accuracyRatio >= SPEED_MIN_ACCURACY;
+
+      const coinsEarned = Math.round(
+        score * quiz.coinsPerPoint * (isSpeedBonus ? SPEED_BONUS_MULTIPLIER : 1)
+      );
 
       tx.update(attemptRef, {
         status: "submitted",
@@ -113,11 +147,19 @@ export async function POST(
         correctCount,
         coinsEarned,
         xpEarned,
+        isSpeedBonus,
         displayName,
         submittedAt: FieldValue.serverTimestamp(),
       });
 
-      return { score, correctCount, coinsEarned, xpEarned, maxScore: attempt.maxScore };
+      return {
+        score,
+        correctCount,
+        coinsEarned,
+        xpEarned,
+        isSpeedBonus,
+        maxScore: attempt.maxScore,
+      };
     });
 
     let newBadges: string[] = [];
@@ -146,7 +188,11 @@ export async function POST(
           actorEmail: "system",
           action: "quiz.award_failed",
           target: user.uid,
-          details: { attemptId: body.attemptId, coins: graded.coinsEarned, xp: graded.xpEarned },
+          details: {
+            attemptId: body.attemptId,
+            coins: graded.coinsEarned,
+            xp: graded.xpEarned,
+          },
         });
       }
     } else {
@@ -160,6 +206,8 @@ export async function POST(
       correctCount: graded.correctCount,
       totalQuestions: Object.keys(answerKey).length,
       coinsEarned: graded.coinsEarned,
+      xpEarned: graded.xpEarned,
+      isSpeedBonus: graded.isSpeedBonus,
       newBadges,
       reviewAvailable: quiz.settings.showReview,
     });

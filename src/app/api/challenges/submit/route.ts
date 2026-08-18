@@ -22,8 +22,8 @@ export const runtime = "nodejs";
  * - One submission per student per challenge (deterministic doc ID).
  * - Editable until the deadline; every edit resets review status to pending
  *   and appends to an immutable history array.
- * - Any referenced storage file must live under the caller's own folder —
- *   a student can never attach another student's upload.
+ * - Submissions store external project/video/code links (GitHub, Drive, Loom, UiPath Cloud)
+ *   directly in Firestore, requiring zero Firebase Storage bucket dependencies.
  */
 export async function POST(req: NextRequest) {
   return handleApi(async () => {
@@ -32,19 +32,6 @@ export async function POST(req: NextRequest) {
     rateLimit(`challenge-submit:${user.uid}`, { limit: 10, windowMs: 60_000 });
 
     const body = await parseBody(req, challengeSubmitSchema);
-
-    // Ownership check on the storage path (matches storage.rules layout).
-    const ownPrefix = `submissions/${user.uid}/${body.challengeId}/`;
-    if (body.filePath && !body.filePath.startsWith(ownPrefix)) {
-      throw new ApiError(403, "Attached file is outside your submission folder.");
-    }
-    if (
-      body.fileUrl &&
-      !body.fileUrl.includes(encodeURIComponent(ownPrefix)) &&
-      !body.fileUrl.includes(ownPrefix)
-    ) {
-      throw new ApiError(403, "Attached file is outside your submission folder.");
-    }
 
     const db = adminDb();
     const challengeRef = db.collection("challenges").doc(body.challengeId);

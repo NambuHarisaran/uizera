@@ -19,6 +19,7 @@ import { toMillis } from "@/lib/utils";
 import type { QuizAttempt } from "@/types";
 
 export const runtime = "nodejs";
+export const maxDuration = 10; // Vercel free tier cap
 
 /**
  * POST /api/quiz/[quizId]/start
@@ -28,6 +29,9 @@ export const runtime = "nodejs";
  * cannot mint extra attempts. Question/option order is randomized server-side
  * per attempt and stored, so a resume shows the identical arrangement and
  * clients never influence ordering.
+ *
+ * Pre-transaction reads (quiz, questions, user profile) are parallelized so
+ * latency is bounded by the slowest single read rather than their sum.
  */
 export async function POST(
   req: NextRequest,
@@ -40,13 +44,22 @@ export async function POST(
     rateLimit(`quiz-start:${user.uid}`, { limit: 10, windowMs: 60_000 });
 
     const now = Date.now();
-    const quiz = await getQuizOrThrow(quizId);
+
+    // Parallel pre-transaction reads: quiz meta, questions, and user displayName
+    const [quiz, questions, userSnap] = await Promise.all([
+      getQuizOrThrow(quizId),
+      getQuizQuestions(quizId),
+      adminDb().collection("users").doc(user.uid).get(),
+    ]);
+
     assertQuizOpen(quiz, now);
 
-    const questions = await getQuizQuestions(quizId);
     if (questions.length === 0) {
       throw new ApiError(500, "Quiz has no questions yet.");
     }
+
+    const displayName =
+      (userSnap.data()?.displayName as string | undefined) || "Member";
 
     const db = adminDb();
     const counterRef = db
@@ -101,7 +114,7 @@ export async function POST(
         quizId,
         quizTitle: quiz.title,
         uid: user.uid,
-        displayName: "",
+        displayName,
         attemptNo,
         status: "in_progress",
         questionOrder,
@@ -145,6 +158,7 @@ export async function POST(
       durationSeconds: quiz.durationSeconds,
       maxScore: result.attempt.maxScore,
       questions: view,
+      // Return saved answers for seamless resume
       answers: result.resumed ? result.attempt.answers : {},
     });
   });

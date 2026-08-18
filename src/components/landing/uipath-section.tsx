@@ -15,7 +15,21 @@ import { SectionHeading } from "@/components/shared/section-heading";
 import { TiltCard } from "@/components/shared/tilt-card";
 import { Magnetic } from "@/components/shared/magnetic";
 import { Parallax } from "@/components/shared/parallax";
-import { HeroRemotionPlayer } from "@/components/remotion/hero-player";
+import dynamic from "next/dynamic";
+
+// Remotion Player is ~800KB — lazy load it so it never blocks the initial page
+const HeroRemotionPlayer = dynamic(
+  () =>
+    import("@/components/remotion/hero-player").then((m) => ({
+      default: m.HeroRemotionPlayer,
+    })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="aspect-video w-full animate-pulse rounded-2xl bg-muted" />
+    ),
+  }
+);
 
 const features = [
   {

@@ -4,7 +4,38 @@ import { adminDb, FieldValue, Timestamp } from "@/lib/firebase/admin";
 import { ApiError } from "@/lib/server/api";
 import { shuffle, toMillis } from "@/lib/utils";
 import type { QuizUpsertInput } from "@/lib/validation";
-import type { Quiz, QuizQuestionPublic, QuizStatus } from "@/types";
+import type { Quiz, QuestionType, QuizQuestionPublic, QuizStatus } from "@/types";
+
+/**
+ * Type-aware question grader.
+ *
+ * - mcq / true_false / image: exact match — full points or zero.
+ * - multi_select: partial credit with wrong-answer penalty.
+ *   Formula: max(0, correctHits − wrongHits) / totalCorrect × points
+ *   The penalty prevents the "select all options" exploit.
+ *
+ * `selected` and `correct` must both be original (pre-shuffle) option indices.
+ */
+export function gradeQuestion(
+  type: QuestionType,
+  selected: number[],
+  correct: number[],
+  points: number
+): number {
+  const S = new Set(selected);
+  const C = new Set(correct);
+
+  if (type === "multi_select") {
+    const correctHits = [...S].filter((v) => C.has(v)).length;
+    const wrongHits = [...S].filter((v) => !C.has(v)).length;
+    const net = Math.max(0, correctHits - wrongHits);
+    return C.size > 0 ? Math.round((net / C.size) * points) : 0;
+  }
+
+  // Exact match for mcq, true_false, image
+  const exact = S.size === C.size && [...C].every((c) => S.has(c));
+  return exact ? points : 0;
+}
 
 /** Split validated quiz input into the public docs + private answer key. */
 export function buildQuizDocs(input: {

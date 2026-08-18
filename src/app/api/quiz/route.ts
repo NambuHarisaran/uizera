@@ -1,5 +1,6 @@
+import { NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
-import { handleApi, jsonOk } from "@/lib/server/api";
+import { handleApi } from "@/lib/server/api";
 
 export const runtime = "nodejs";
 
@@ -10,6 +11,9 @@ export const runtime = "nodejs";
  * Live-session (instructor-led) quizzes never appear here, launched or not —
  * they're only reachable via the Live Stage link/QR the instructor shares,
  * so a premade session's questions can't be browsed ahead of time.
+ *
+ * Cache: 30s CDN + 10s SWR so a newly published quiz appears within ~40s
+ * while keeping Firestore read costs low on the free tier.
  */
 export async function GET() {
   return handleApi(async () => {
@@ -23,6 +27,10 @@ export async function GET() {
     const quizzes = snap.docs
       .map((d) => ({ id: d.id, ...d.data() }))
       .filter((q: any) => q.mode !== "live");
-    return jsonOk({ quizzes });
+
+    return NextResponse.json(
+      { ok: true, data: { quizzes } },
+      { headers: { "Cache-Control": "s-maxage=30, stale-while-revalidate=10" } }
+    );
   });
 }

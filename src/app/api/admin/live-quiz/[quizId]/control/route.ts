@@ -9,8 +9,18 @@ import { getQuizQuestions } from "@/lib/server/quiz";
 export const runtime = "nodejs";
 
 const controlSchema = z.object({
-  action: z.enum(["start", "setQuestion", "toggleAnswer", "end", "relaunch"]),
+  action: z.enum([
+    "start",
+    "setQuestion",
+    "toggleAnswer",
+    "showLeaderboard",
+    "hideLeaderboard",
+    "kickParticipant",
+    "end",
+    "relaunch",
+  ]),
   questionIndex: z.number().int().min(0).optional(),
+  targetUid: z.string().optional(),
 });
 
 export async function POST(
@@ -21,7 +31,7 @@ export async function POST(
     assertSameOrigin(req);
     const admin = await requireAdmin();
     const { quizId } = await params;
-    const { action, questionIndex } = await parseBody(req, controlSchema);
+    const { action, questionIndex, targetUid } = await parseBody(req, controlSchema);
 
     const db = adminDb();
     const quizRef = db.collection("quizzes").doc(quizId);
@@ -38,13 +48,11 @@ export async function POST(
 
     if (action === "start") {
       await quizRef.update({ status: "live", mode: "live" });
-      // Go straight to the first question — every participant on the
-      // waiting screen syncs to it at once. There is no separate "waiting"
-      // sub-state after Start; that was leaving the stage stuck forever.
       await sessionRef.set({
         quizId,
         quizTitle: quizData.title,
         status: "active",
+        viewState: "question",
         currentQuestionIndex: 0,
         questionStartAtMs: Date.now(),
         questionDurationSeconds: quizData.durationSeconds || 30,
@@ -58,6 +66,7 @@ export async function POST(
           quizId,
           quizTitle: quizData.title,
           status: "active",
+          viewState: "question",
           currentQuestionIndex: idx,
           questionStartAtMs: Date.now(),
           revealAnswer: false,
@@ -73,12 +82,44 @@ export async function POST(
         },
         { merge: true }
       );
-      // Idempotent: a double "End" click (or the final-question button and a
-      // later manual End) must not award coins twice.
+    } else if (action === "showLeaderboard") {
+      await sessionRef.set(
+        {
+          viewState: "leaderboard",
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    } else if (action === "hideLeaderboard") {
+      await sessionRef.set(
+        {
+          viewState: "question",
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    } else if (action === "kickParticipant") {
+      if (!targetUid) throw new ApiError(400, "Missing targetUid to kick.");
+      // Mark as kicked in participants collection
+      const participantRef = sessionRef.collection("participants").doc(targetUid);
+      await participantRef.set(
+        { kicked: true, updatedAt: FieldValue.serverTimestamp() },
+        { merge: true }
+      );
+      // Remove any responses
+      const responseRef = sessionRef.collection("responses").doc(targetUid);
+      await responseRef.delete();
+      // Trigger session update
+      await sessionRef.set(
+        { lastAnswerAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() },
+        { merge: true }
+      );
+    } else if (action === "end") {
+      // Idempotent: a double "End" click must not award coins twice.
       if (currentSession.status !== "ended") {
         await quizRef.update({ status: "closed" });
         await sessionRef.set(
-          { status: "ended", updatedAt: FieldValue.serverTimestamp() },
+          { status: "ended", viewState: "leaderboard", updatedAt: FieldValue.serverTimestamp() },
           { merge: true }
         );
 
@@ -119,6 +160,7 @@ export async function POST(
         quizId,
         quizTitle: quizData.title,
         status: "waiting",
+        viewState: "lobby",
         currentQuestionIndex: 0,
         questionStartAtMs: Date.now(),
         questionDurationSeconds: quizData.durationSeconds || 30,
@@ -128,7 +170,11 @@ export async function POST(
       const responsesSnap = await sessionRef.collection("responses").get();
       const batch = db.batch();
       responsesSnap.docs.forEach((d) => batch.delete(d.ref));
-      if (responsesSnap.docs.length > 0) await batch.commit();
+      const participantsSnap = await sessionRef.collection("participants").get();
+      participantsSnap.docs.forEach((d) => batch.delete(d.ref));
+      if (responsesSnap.docs.length > 0 || participantsSnap.docs.length > 0) {
+        await batch.commit();
+      }
     }
 
     await audit({
@@ -136,7 +182,7 @@ export async function POST(
       actorEmail: admin.email,
       action: `live_quiz.${action}`,
       target: quizId,
-      details: { questionIndex },
+      details: { questionIndex, targetUid },
     });
 
     const updatedSessionSnap = await sessionRef.get();

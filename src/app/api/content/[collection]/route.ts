@@ -1,6 +1,6 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
-import { handleApi, jsonOk } from "@/lib/server/api";
+import { handleApi } from "@/lib/server/api";
 
 export const runtime = "nodejs";
 
@@ -11,6 +11,23 @@ const PUBLIC_COLLECTIONS = new Set([
   "gallery",
   "team",
 ]);
+
+/**
+ * CDN cache TTLs per collection (seconds).
+ * These are served from Vercel's edge network so Firestore is only hit once
+ * per window per region, drastically reducing serverless function invocations
+ * on the free tier.
+ *
+ * stale-while-revalidate lets the CDN serve stale content instantly while
+ * refreshing in the background — zero latency for the visitor.
+ */
+const CACHE_TTL: Record<string, string> = {
+  team:          "s-maxage=3600, stale-while-revalidate=300",   // 1hr / 5min SWR
+  gallery:       "s-maxage=3600, stale-while-revalidate=300",   // 1hr / 5min SWR
+  resources:     "s-maxage=600,  stale-while-revalidate=60",    // 10min / 1min SWR
+  announcements: "s-maxage=120,  stale-while-revalidate=30",    // 2min / 30s SWR
+  events:        "s-maxage=300,  stale-while-revalidate=60",    // 5min / 1min SWR
+};
 
 /**
  * GET /api/content/[collection] — public read for published content.
@@ -24,7 +41,7 @@ export async function GET(
     const { collection } = await params;
 
     if (!PUBLIC_COLLECTIONS.has(collection)) {
-      return jsonOk({ items: [] });
+      return NextResponse.json({ ok: true, data: { items: [] } });
     }
 
     const db = adminDb();
@@ -65,7 +82,11 @@ export async function GET(
     }
 
     const items = docs.map((d) => ({ id: d.id, ...d.data() }));
+    const cacheHeader = CACHE_TTL[collection] ?? "s-maxage=60, stale-while-revalidate=30";
 
-    return jsonOk({ items });
+    return NextResponse.json(
+      { ok: true, data: { items } },
+      { headers: { "Cache-Control": cacheHeader } }
+    );
   });
 }

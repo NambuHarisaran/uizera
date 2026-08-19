@@ -1,5 +1,4 @@
 import { NextRequest } from "next/server";
-import { adminDb, FieldValue } from "@/lib/firebase/admin";
 import {
   assertSameOrigin,
   handleApi,
@@ -7,6 +6,7 @@ import {
   parseBody,
 } from "@/lib/server/api";
 import { rateLimit } from "@/lib/server/rate-limit";
+import { audit } from "@/lib/server/audit";
 import { contactSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
@@ -20,14 +20,19 @@ export async function POST(req: NextRequest) {
 
     const body = await parseBody(req, contactSchema);
 
-    await adminDb().collection("contactMessages").add({
-      name: body.name,
-      email: body.email,
-      message: body.message,
-      createdAt: FieldValue.serverTimestamp(),
-      read: false,
+    await audit({
+      actorUid: "anonymous",
+      actorEmail: body.email,
+      action: "contact.message",
+      target: body.name,
+      details: {
+        name: body.name,
+        email: body.email,
+        message: body.message,
+      },
     });
 
     return jsonOk({ sent: true });
   });
 }
+

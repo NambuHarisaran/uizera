@@ -14,7 +14,7 @@ export type FireTimestamp =
   | Date
   | null;
 
-export type Role = "super_admin" | "admin" | "student";
+export type Role = "super_admin" | "admin" | "quiz_host" | "student";
 
 // ── Users ───────────────────────────────────────────────────────────────────
 
@@ -63,7 +63,9 @@ export type LeaderboardPeriod = "weekly" | "monthly" | "overall";
 // ── Quizzes ─────────────────────────────────────────────────────────────────
 
 export type QuizStatus = "draft" | "scheduled" | "live" | "closed";
-export type QuestionType = "mcq" | "true_false" | "multi_select" | "image";
+export type QuestionType = "mcq" | "single" | "true_false" | "multi_select" | "image";
+
+
 
 export interface QuizSettings {
   randomizeQuestions: boolean;
@@ -88,6 +90,9 @@ export interface Quiz {
   xpReward?: number;
   settings: QuizSettings;
   createdBy: string;
+  /** UID of the user assigned to host this quiz live (quiz_host role). */
+  hostUid?: string;
+  hostDisplayName?: string;
   createdAt: FireTimestamp;
   updatedAt: FireTimestamp;
 }

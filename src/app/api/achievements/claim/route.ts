@@ -1,10 +1,11 @@
 import { NextRequest } from "next/server";
-import { adminDb, FieldValue } from "@/lib/firebase/admin";
+import { and, eq } from "drizzle-orm";
+import { z } from "zod";
+import { db } from "@/lib/db/client";
+import { users, coinTransactions } from "@/lib/db/schema";
 import { ApiError, assertSameOrigin, handleApi, jsonOk, parseBody, requireUser } from "@/lib/server/api";
 import { awardCoins } from "@/lib/server/coins";
 import { levelForXp } from "@/lib/utils";
-import type { AppUser } from "@/types";
-import { z } from "zod";
 
 export const runtime = "nodejs";
 
@@ -31,24 +32,31 @@ export async function POST(req: NextRequest) {
     const reward = QUEST_REWARDS[questId];
     if (!reward) throw new ApiError(400, "Unknown quest ID.");
 
-    const db = adminDb();
-    const userRef = db.collection("users").doc(user.uid);
-    const claimedRef = userRef.collection("claimedQuests").doc(questId);
+    // Check if already claimed
+    const existingClaim = await db.query.coinTransactions.findFirst({
+      where: and(
+        eq(coinTransactions.uid, user.uid),
+        eq(coinTransactions.source, "quest_reward"),
+        eq(coinTransactions.refId, questId)
+      ),
+    });
 
-    const claimedSnap = await claimedRef.get();
-    if (claimedSnap.exists) {
+    if (existingClaim) {
       throw new ApiError(400, "Quest reward already claimed.");
     }
 
-    const userSnap = await userRef.get();
-    const profile = (userSnap.data() as AppUser) || {};
+    const profile = await db.query.users.findFirst({
+      where: eq(users.uid, user.uid),
+    });
+    if (!profile) throw new ApiError(404, "User not found.");
+
     const val = reward.reqField === "level" ? levelForXp(profile.xp ?? 0) : (profile as any)[reward.reqField] ?? 0;
 
     if (val < reward.reqValue) {
       throw new ApiError(400, "Quest requirements not met yet.");
     }
 
-    // Award XP and coins
+    // Award XP and coins via D1
     const award = await awardCoins({
       uid: user.uid,
       amount: reward.coins,
@@ -59,12 +67,6 @@ export async function POST(req: NextRequest) {
       awardedBy: "system",
     });
 
-    await claimedRef.set({
-      claimedAt: FieldValue.serverTimestamp(),
-      rewardXp: reward.xp,
-      rewardCoins: reward.coins,
-    });
-
     return jsonOk({
       newCoins: award.newBalance,
       xpAwarded: reward.xp,
@@ -73,3 +75,4 @@ export async function POST(req: NextRequest) {
     });
   });
 }
+

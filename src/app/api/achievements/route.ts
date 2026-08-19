@@ -1,40 +1,40 @@
 import { NextRequest } from "next/server";
-import { adminDb } from "@/lib/firebase/admin";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { users, coinTransactions } from "@/lib/db/schema";
 import { handleApi, jsonOk, requireUser } from "@/lib/server/api";
 import { levelForXp, levelProgress, xpForLevel } from "@/lib/utils";
-import type { AppUser, Quest } from "@/types";
+import type { Quest } from "@/types";
 
 export const runtime = "nodejs";
 
 export async function GET(_req: NextRequest) {
   return handleApi(async () => {
     const user = await requireUser();
-    const db = adminDb();
-    const snap = await db.collection("users").doc(user.uid).get();
-    const profile = (snap.data() as AppUser) || {
-      xp: 0,
-      level: 1,
-      quizzesTaken: 0,
-      challengesApproved: 0,
-      certsCompleted: 0,
-      coins: 0,
-      badges: [],
-    };
 
-    const claimedSnap = await db
-      .collection("users")
-      .doc(user.uid)
-      .collection("claimedQuests")
-      .get();
-    const claimedIds = new Set(claimedSnap.docs.map((d) => d.id));
+    const [profile, claimedTxs] = await Promise.all([
+      db.query.users.findFirst({ where: eq(users.uid, user.uid) }),
+      db.query.coinTransactions.findMany({
+        where: and(
+          eq(coinTransactions.uid, user.uid),
+          eq(coinTransactions.source, "quest_reward")
+        ),
+      }),
+    ]);
 
-    const currentXp = profile.xp ?? 0;
+    const claimedIds = new Set(claimedTxs.map((t) => t.refId).filter(Boolean));
+
+    const currentXp = profile?.xp ?? 0;
     const currentLevel = levelForXp(currentXp);
     const progress = levelProgress(currentXp);
     const nextLevelXp = currentLevel >= 50 ? xpForLevel(50) : xpForLevel(currentLevel + 1);
     const currentLevelFloor = xpForLevel(currentLevel);
 
-    // Dynamic quest definition list
+    let parsedBadges: string[] = [];
+    try {
+      parsedBadges = JSON.parse(profile?.badges ?? "[]");
+    } catch {}
+
     const questDefs: Omit<Quest, "completed" | "claimed">[] = [
       {
         id: "daily_quiz",
@@ -44,7 +44,7 @@ export async function GET(_req: NextRequest) {
         rewardCoins: 25,
         category: "daily",
         icon: "Zap",
-        current: Math.min(1, profile.quizzesTaken ?? 0),
+        current: Math.min(1, profile?.quizzesTaken ?? 0),
         target: 1,
       },
       {
@@ -55,7 +55,7 @@ export async function GET(_req: NextRequest) {
         rewardCoins: 75,
         category: "lifetime",
         icon: "Flame",
-        current: Math.min(5, profile.quizzesTaken ?? 0),
+        current: Math.min(5, profile?.quizzesTaken ?? 0),
         target: 5,
       },
       {
@@ -66,7 +66,7 @@ export async function GET(_req: NextRequest) {
         rewardCoins: 150,
         category: "lifetime",
         icon: "Crown",
-        current: Math.min(10, profile.quizzesTaken ?? 0),
+        current: Math.min(10, profile?.quizzesTaken ?? 0),
         target: 10,
       },
       {
@@ -77,7 +77,7 @@ export async function GET(_req: NextRequest) {
         rewardCoins: 100,
         category: "lifetime",
         icon: "Target",
-        current: Math.min(1, profile.challengesApproved ?? 0),
+        current: Math.min(1, profile?.challengesApproved ?? 0),
         target: 1,
       },
       {
@@ -88,7 +88,7 @@ export async function GET(_req: NextRequest) {
         rewardCoins: 120,
         category: "lifetime",
         icon: "Shield",
-        current: Math.min(5, profile.certsCompleted ?? 0),
+        current: Math.min(5, profile?.certsCompleted ?? 0),
         target: 5,
       },
       {
@@ -131,8 +131,9 @@ export async function GET(_req: NextRequest) {
       progress,
       currentLevelFloor,
       nextLevelXp,
-      badges: profile.badges ?? [],
+      badges: parsedBadges,
       quests,
     });
   });
 }
+

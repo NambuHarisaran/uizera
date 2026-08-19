@@ -46,7 +46,10 @@ service cloud.firestore {
     //    is never readable by any client, including admins (server-only). ──
     match /quizzes/{quizId} {
       allow read: if isAdmin()
-        || (isSignedIn() && resource.data.status in ['scheduled', 'live', 'closed']);
+        || (isSignedIn() && (
+          resource.data.status in ['scheduled', 'live', 'closed']
+          || resource.data.hostUid == request.auth.uid
+        ));
       allow write: if false;
 
       match /questions/{questionId} {

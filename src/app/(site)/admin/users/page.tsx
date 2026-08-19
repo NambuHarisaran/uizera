@@ -180,6 +180,7 @@ export default function AdminUsersPage() {
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="student">Student</SelectItem>
+                                <SelectItem value="quiz_host">Quiz Host</SelectItem>
                                 <SelectItem value="admin">Admin</SelectItem>
                               </SelectContent>
                             </Select>

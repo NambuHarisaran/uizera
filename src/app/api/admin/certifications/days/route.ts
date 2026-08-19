@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { adminDb, Timestamp } from "@/lib/firebase/admin";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { certProgram } from "@/lib/db/schema";
 import {
   assertSameOrigin,
   handleApi,
@@ -17,31 +19,47 @@ const bodySchema = z.object({
   days: z.array(certDayUpsertSchema).min(1).max(30),
 });
 
-/** POST /api/admin/certifications/days — upsert program-day definitions. */
+/** POST /api/admin/certifications/days — upsert program-day definitions in Cloudflare D1. */
 export async function POST(req: NextRequest) {
   return handleApi(async () => {
     assertSameOrigin(req);
     const admin = await requireAdmin();
     const { days } = await parseBody(req, bodySchema);
 
-    const db = adminDb();
-    const batch = db.batch();
+    const now = Date.now();
+
     for (const d of days) {
-      const id = `day-${String(d.day).padStart(2, "0")}`;
-      batch.set(
-        db.collection("certProgram").doc(id),
-        {
-          day: d.day,
-          certName: d.certName,
-          description: d.description,
-          link: d.link,
+      const dayId = `day_${d.day}`;
+      const existing = await db.query.certProgram.findFirst({
+        where: eq(certProgram.dayId, dayId),
+      });
+
+      if (existing) {
+        await db
+          .update(certProgram)
+          .set({
+            dayNumber: d.day,
+            title: d.certName,
+            description: d.description ?? "",
+            resourceUrl: d.link ?? null,
+            coins: d.coins,
+          })
+          .where(eq(certProgram.dayId, dayId));
+      } else {
+        await db.insert(certProgram).values({
+          dayId,
+          dayNumber: d.day,
+          title: d.certName,
+          description: d.description ?? "",
+          resourceUrl: d.link ?? null,
           coins: d.coins,
-          unlockDate: Timestamp.fromMillis(d.unlockDate),
-        },
-        { merge: true }
-      );
+          xp: 10,
+          createdAt: now,
+        });
+      }
+
+
     }
-    await batch.commit();
 
     await audit({
       actorUid: admin.uid,
@@ -54,3 +72,4 @@ export async function POST(req: NextRequest) {
     return jsonOk({ upserted: days.length });
   });
 }
+

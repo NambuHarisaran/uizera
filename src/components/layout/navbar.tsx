@@ -23,7 +23,7 @@ import { toast } from "sonner";
 
 export function Navbar() {
   const pathname = usePathname();
-  const { user, firebaseUser, loading, isAdmin, signInWithGoogle, signOut } = useAuth();
+  const { user, firebaseUser, loading, isAdmin, isHost, signInWithGoogle, signOut } = useAuth();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -169,17 +169,18 @@ export function Navbar() {
                   className="rounded-full outline-none ring-brand-500 focus-visible:ring-2"
                 >
                   <Avatar className="h-8 w-8 sm:h-9 sm:w-9 border-2 border-brand-500/40">
-                    <AvatarImage src={user.photoURL ?? undefined} alt={user.displayName} />
+                    <AvatarImage src={user.photoURL ?? undefined} alt={user.displayName || "User"} />
                     <AvatarFallback>{initials(user.displayName)}</AvatarFallback>
                   </Avatar>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuLabel className="flex flex-col">
-                    <span className="truncate" title={user.displayName}>{user.displayName}</span>
+                    <span className="truncate" title={user.displayName || "User"}>{user.displayName || "User"}</span>
                     <span className="text-xs font-normal text-muted-foreground">
-                      Level {user.level} · <span className="font-semibold text-foreground">{rankStyleForLevel(user.level).title}</span>
+                      Level {user.level ?? 1} · <span className="font-semibold text-foreground">{rankStyleForLevel(user.level ?? 1).title}</span>
                     </span>
                   </DropdownMenuLabel>
+
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
                     <Link href="/profile">
@@ -191,6 +192,13 @@ export function Navbar() {
                       Achievements & Level
                     </Link>
                   </DropdownMenuItem>
+                  {isHost && (
+                    <DropdownMenuItem asChild>
+                      <Link href="/host">
+                        <Crown className="text-amber-500" /> Host portal
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
                   {isAdmin && (
                     <DropdownMenuItem asChild>
                       <Link href="/admin">
@@ -327,6 +335,14 @@ export function Navbar() {
                   >
                     Learning Resources
                   </Link>
+                  {isHost && (
+                    <Link
+                      href="/host"
+                      className="block rounded-lg px-3 py-1.5 text-sm font-bold text-amber-500 hover:bg-accent mt-1"
+                    >
+                      Host Portal
+                    </Link>
+                  )}
                   {isAdmin && (
                     <Link
                       href="/admin"

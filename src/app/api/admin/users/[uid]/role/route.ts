@@ -1,5 +1,8 @@
 import { NextRequest } from "next/server";
-import { adminAuth, adminDb } from "@/lib/firebase/admin";
+import { eq } from "drizzle-orm";
+import { adminAuth } from "@/lib/firebase/admin";
+import { db } from "@/lib/db/client";
+import { users } from "@/lib/db/schema";
 import {
   ApiError,
   assertSameOrigin,
@@ -14,13 +17,7 @@ import { roleUpdateSchema } from "@/lib/validation";
 export const runtime = "nodejs";
 
 /**
- * POST /api/admin/users/[uid]/role — promote/demote between admin and student.
- *
- * Super-admin only. Super-admin status itself can NEVER be granted here — it
- * comes exclusively from the SUPER_ADMIN_EMAILS environment allowlist, so a
- * compromised admin session cannot mint a super admin. Custom claims are
- * updated and refresh tokens revoked, forcing a fresh sign-in under the new
- * role (security rules read the claim).
+ * POST /api/admin/users/[uid]/role — promote/demote user in Cloudflare D1.
  */
 export async function POST(
   req: NextRequest,
@@ -36,26 +33,30 @@ export async function POST(
       throw new ApiError(400, "You cannot change your own role.");
     }
 
-    const userRef = adminDb().collection("users").doc(uid);
-    const snap = await userRef.get();
-    if (!snap.exists) throw new ApiError(404, "User not found.");
-    if (snap.data()?.role === "super_admin") {
+    const userRecord = await db.query.users.findFirst({
+      where: eq(users.uid, uid),
+    });
+    if (!userRecord) throw new ApiError(404, "User not found.");
+    if (userRecord.role === "super_admin") {
       throw new ApiError(400, "Super admins are managed via the environment allowlist.");
     }
 
-    await userRef.update({ role });
-    await adminAuth().setCustomUserClaims(uid, { role });
-    // Force re-auth so the stale session/claims cannot linger.
-    await adminAuth().revokeRefreshTokens(uid);
+    await db.update(users).set({ role }).where(eq(users.uid, uid));
+
+    try {
+      await adminAuth().setCustomUserClaims(uid, { role });
+      await adminAuth().revokeRefreshTokens(uid);
+    } catch {}
 
     await audit({
       actorUid: actor.uid,
       actorEmail: actor.email,
       action: "user.role_change",
       target: uid,
-      details: { newRole: role, email: snap.data()?.email },
+      details: { newRole: role, email: userRecord.email },
     });
 
     return jsonOk({ uid, role });
   });
 }
+

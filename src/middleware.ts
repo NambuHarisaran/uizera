@@ -10,6 +10,7 @@ import { SESSION_COOKIE } from "@/lib/constants";
 
 const PROTECTED_PREFIXES = [
   "/admin",
+  "/host",
   "/profile",
   "/quiz",
   "/challenges",
@@ -35,6 +36,7 @@ export function middleware(req: NextRequest) {
 export const config = {
   matcher: [
     "/admin/:path*",
+    "/host/:path*",
     "/profile/:path*",
     "/quiz/:path*",
     "/challenges/:path*",

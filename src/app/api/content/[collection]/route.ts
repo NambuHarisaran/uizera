@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase/admin";
+import { asc, desc, eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { announcements, communityEvents, learningResources, teamMembers, gallery } from "@/lib/db/schema";
 import { handleApi } from "@/lib/server/api";
 
 export const runtime = "nodejs";
@@ -12,26 +14,16 @@ const PUBLIC_COLLECTIONS = new Set([
   "team",
 ]);
 
-/**
- * CDN cache TTLs per collection (seconds).
- * These are served from Vercel's edge network so Firestore is only hit once
- * per window per region, drastically reducing serverless function invocations
- * on the free tier.
- *
- * stale-while-revalidate lets the CDN serve stale content instantly while
- * refreshing in the background — zero latency for the visitor.
- */
 const CACHE_TTL: Record<string, string> = {
-  team:          "s-maxage=3600, stale-while-revalidate=300",   // 1hr / 5min SWR
-  gallery:       "s-maxage=3600, stale-while-revalidate=300",   // 1hr / 5min SWR
-  resources:     "s-maxage=600,  stale-while-revalidate=60",    // 10min / 1min SWR
-  announcements: "s-maxage=120,  stale-while-revalidate=30",    // 2min / 30s SWR
-  events:        "s-maxage=300,  stale-while-revalidate=60",    // 5min / 1min SWR
+  team:          "s-maxage=3600, stale-while-revalidate=300",
+  gallery:       "s-maxage=3600, stale-while-revalidate=300",
+  resources:     "s-maxage=600,  stale-while-revalidate=60",
+  announcements: "s-maxage=120,  stale-while-revalidate=30",
+  events:        "s-maxage=300,  stale-while-revalidate=60",
 };
 
 /**
- * GET /api/content/[collection] — public read for published content.
- * Includes graceful fallback if composite indexes are building in Firestore.
+ * GET /api/content/[collection] — public read from Cloudflare D1.
  */
 export async function GET(
   _req: NextRequest,
@@ -44,44 +36,76 @@ export async function GET(
       return NextResponse.json({ ok: true, data: { items: [] } });
     }
 
-    const db = adminDb();
-    let docs;
+    let items: any[] = [];
 
-    try {
-      let query = db.collection(collection).limit(500);
-
-      // Filter by published for content that has the field
-      if (collection === "events" || collection === "resources" || collection === "announcements") {
-        query = query.where("published", "==", true);
-      }
-
-      // Order by appropriate field
-      if (collection === "events") {
-        query = query.orderBy("date", "desc");
-      } else if (collection === "announcements") {
-        query = query.orderBy("publishedAt", "desc");
-      } else if (collection === "gallery" || collection === "team") {
-        query = query.orderBy("order", "asc");
-      } else {
-        query = query.orderBy("createdAt", "desc");
-      }
-
-      const snap = await query.get();
-      docs = snap.docs;
-    } catch (err: any) {
-      if (err?.code === 9 || String(err).includes("FAILED_PRECONDITION")) {
-        // Fallback: fetch without where/orderBy composite requirement and sort in-memory
-        const snap = await db.collection(collection).limit(500).get();
-        docs = snap.docs;
-        if (collection === "events" || collection === "resources" || collection === "announcements") {
-          docs = docs.filter((d) => d.data().published === true);
-        }
-      } else {
-        throw err;
-      }
+    if (collection === "events") {
+      const rows = await db.query.communityEvents.findMany({
+        where: eq(communityEvents.published, true),
+        orderBy: [desc(communityEvents.date)],
+        limit: 100,
+      });
+      items = rows.map((r) => {
+        let speakers: any = [];
+        try {
+          speakers = JSON.parse(r.speakers ?? "[]");
+        } catch {}
+        return {
+          ...r,
+          speakers,
+          date: new Date(r.date),
+          createdAt: new Date(r.createdAt),
+        };
+      });
+    } else if (collection === "resources") {
+      const rows = await db.query.learningResources.findMany({
+        where: eq(learningResources.published, true),
+        orderBy: [desc(learningResources.createdAt)],
+        limit: 200,
+      });
+      items = rows.map((r) => {
+        let tags: any = [];
+        try {
+          tags = JSON.parse(r.tags ?? "[]");
+        } catch {}
+        return {
+          ...r,
+          tags,
+          createdAt: new Date(r.createdAt),
+        };
+      });
+    } else if (collection === "announcements") {
+      const rows = await db.query.announcements.findMany({
+        where: eq(announcements.published, true),
+        orderBy: [desc(announcements.publishedAt)],
+        limit: 50,
+      });
+      items = rows.map((r) => ({
+        ...r,
+        publishedAt: r.publishedAt ? new Date(r.publishedAt) : null,
+      }));
+    } else if (collection === "team") {
+      const rows = await db.query.teamMembers.findMany({
+        orderBy: [asc(teamMembers.orderIndex)],
+        limit: 100,
+      });
+      items = rows.map((r) => ({
+        ...r,
+        order: r.orderIndex,
+      }));
+    } else if (collection === "gallery") {
+      const rows = await db.query.gallery.findMany({
+        orderBy: [desc(gallery.createdAt)],
+        limit: 100,
+      });
+      items = rows.map((r) => ({
+        ...r,
+        image: r.imageUrl,
+        caption: r.title,
+        createdAt: new Date(r.createdAt),
+      }));
     }
 
-    const items = docs.map((d) => ({ id: d.id, ...d.data() }));
+
     const cacheHeader = CACHE_TTL[collection] ?? "s-maxage=60, stale-while-revalidate=30";
 
     return NextResponse.json(
@@ -90,3 +114,4 @@ export async function GET(
     );
   });
 }
+

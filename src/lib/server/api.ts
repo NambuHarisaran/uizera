@@ -2,7 +2,7 @@ import "server-only";
 
 import { NextRequest, NextResponse } from "next/server";
 import { ZodError, type ZodSchema } from "zod";
-import { getSessionUser, isAdminRole, type SessionUser } from "@/lib/auth/session";
+import { getSessionUser, isAdminRole, isHostRole, type SessionUser } from "@/lib/auth/session";
 
 /** Thrown by guards; converted to a sanitized JSON response by `handleApi`. */
 export class ApiError extends Error {
@@ -65,6 +65,14 @@ export async function requireSuperAdmin(): Promise<SessionUser> {
   }
   return user;
 }
+
+/** Role guard: 403 unless quiz_host, admin, or super_admin. */
+export async function requireQuizHost(): Promise<SessionUser> {
+  const user = await requireUser();
+  if (!isHostRole(user.role)) throw new ApiError(403, "Quiz host access required.");
+  return user;
+}
+
 
 /**
  * CSRF defense-in-depth: state-changing routes only accept requests whose

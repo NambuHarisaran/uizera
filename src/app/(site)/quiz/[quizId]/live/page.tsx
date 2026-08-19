@@ -2,8 +2,6 @@
 
 import { use, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { doc, onSnapshot } from "firebase/firestore";
-import { clientDb } from "@/lib/firebase/client";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import {
@@ -25,6 +23,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { Spinner } from "@/components/shared/spinner";
 import { postJson, unwrap } from "@/lib/fetcher";
 import { shortName } from "@/lib/utils";
@@ -39,6 +38,26 @@ interface AnswerRecord {
   // does not send them in the submit response to prevent cheating.
   correct?: boolean;
   points?: number;
+}
+
+function playClickSound() {
+  if (typeof window === "undefined") return;
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(520, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.06);
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.06);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.06);
+  } catch {}
 }
 
 export default function ParticipantLiveQuizPage({
@@ -111,36 +130,13 @@ export default function ParticipantLiveQuizPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quizId, user, authLoading]);
 
-  // Real-time Firestore snapshot listener
+  // Fast real-time polling (750ms) for snappy Kahoot-style live response
   useEffect(() => {
     if (!user) return;
-    const unsub = onSnapshot(
-      doc(clientDb(), "liveQuizSessions", quizId),
-      (snap) => {
-        if (!snap.exists()) return;
-        const newSession = snap.data() as LiveQuizSession;
-        setSession(newSession);
-
-        const prevIdx = prevQuestionIndexRef.current;
-        const newIdx = newSession.currentQuestionIndex;
-
-        // Reload data only when question changes, viewState changes, or answer is revealed
-        if (
-          prevIdx === null ||
-          newIdx !== prevIdx ||
-          newSession.status === "ended" ||
-          newSession.revealAnswer ||
-          newSession.viewState === "leaderboard"
-        ) {
-          prevQuestionIndexRef.current = newIdx;
-          void loadData();
-        }
-      },
-      (err) => {
-        console.warn("Live sync snapshot warning:", err?.message || err);
-      }
-    );
-    return () => unsub();
+    const interval = setInterval(() => {
+      void loadData();
+    }, 750);
+    return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quizId, user]);
 
@@ -168,37 +164,44 @@ export default function ParticipantLiveQuizPage({
       setTimeLeft(remain);
     };
     tick();
-    const id = setInterval(tick, 1000);
+    const id = setInterval(tick, 500);
     return () => clearInterval(id);
   }, [session?.questionStartAtMs, session?.questionDurationSeconds, session?.status, isLeaderboard]);
 
   const handleSelect = async (questionId: string, optionIdx: number) => {
     if (myAnswers[questionId] || isRevealed || submittingQ || isKicked) return;
 
+    // ⚡ 1. Instant optimistic locking for 0ms lag on mobile/desktop
+    if (typeof window !== "undefined" && "vibrate" in navigator) {
+      try { navigator.vibrate(30); } catch {}
+    }
+    playClickSound();
+    setMyAnswers((prev) => ({
+      ...prev,
+      [questionId]: { selected: [optionIdx] },
+    }));
     setSubmittingQ(questionId);
+
     try {
       const res = await postJson<{ received: boolean; totalScore: number }>(
         `/api/live-quiz/${quizId}/answer`,
         { questionId, questionIndex: currentQIndex, selected: [optionIdx] }
       );
       const data = unwrap(res);
-      // Store only the selected index — correct/points are intentionally
-      // withheld until the host reveals the answer to prevent cross-device
-      // answer sharing. The reveal flow (isRevealed) will update myAnswers
-      // with the real result via the next loadData() call.
-      setMyAnswers((prev) => ({
-        ...prev,
-        [questionId]: { selected: [optionIdx] },
-      }));
       setMyScore(data.totalScore);
-      // Neutral confirmation — never hint at correct/incorrect before reveal.
-      toast.success("Answer locked in! ⏳ Wait for the reveal...");
     } catch (err) {
+      // Revert only if network submission critically failed
+      setMyAnswers((prev) => {
+        const next = { ...prev };
+        delete next[questionId];
+        return next;
+      });
       toast.error(err instanceof Error ? err.message : "Could not submit your answer.");
     } finally {
       setSubmittingQ(null);
     }
   };
+
 
   const handleGoogleLogin = async () => {
     setSigningIn(true);

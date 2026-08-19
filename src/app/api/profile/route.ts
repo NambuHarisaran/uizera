@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
-import { adminDb } from "@/lib/firebase/admin";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { users } from "@/lib/db/schema";
 import {
   ApiError,
   assertSameOrigin,
@@ -15,9 +17,7 @@ import { getAppUser } from "@/lib/auth/session";
 export const runtime = "nodejs";
 
 /**
- * GET /api/profile — the caller's own full profile, read server-side with the
- * Admin SDK. Serves as the authoritative fallback when the client SDK cannot
- * read the users doc directly (e.g. security rules not yet deployed).
+ * GET /api/profile — the caller's own full profile from Cloudflare D1.
  */
 export async function GET() {
   return handleApi(async () => {
@@ -28,9 +28,7 @@ export async function GET() {
 }
 
 /**
- * POST /api/profile — update the caller's own profile.
- * Schema-limited to cosmetic fields; role, coins, badges, and counters are
- * structurally unreachable from here.
+ * POST /api/profile — update the caller's own profile in Cloudflare D1.
  */
 export async function POST(req: NextRequest) {
   return handleApi(async () => {
@@ -40,7 +38,7 @@ export async function POST(req: NextRequest) {
 
     const body = await parseBody(req, profileUpdateSchema);
 
-    const updates: Record<string, unknown> = {};
+    const updates: Record<string, any> = {};
     if (body.displayName !== undefined) updates.displayName = body.displayName;
     if (body.department !== undefined) updates.department = body.department;
     if (body.year !== undefined) updates.year = body.year;
@@ -51,7 +49,8 @@ export async function POST(req: NextRequest) {
       return jsonOk({ updated: false });
     }
 
-    await adminDb().collection("users").doc(user.uid).update(updates);
+    await db.update(users).set(updates).where(eq(users.uid, user.uid));
     return jsonOk({ updated: true });
   });
 }
+

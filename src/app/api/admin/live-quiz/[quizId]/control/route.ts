@@ -1,10 +1,16 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { adminDb, FieldValue } from "@/lib/firebase/admin";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import {
+  quizzes,
+  liveQuizSessions,
+  liveQuizParticipants,
+  liveQuizResponses,
+} from "@/lib/db/schema";
 import { ApiError, assertSameOrigin, handleApi, jsonOk, parseBody, requireAdmin } from "@/lib/server/api";
 import { audit } from "@/lib/server/audit";
-import { awardCoins } from "@/lib/server/coins";
-import { getQuizQuestions } from "@/lib/server/quiz";
+import { endLiveQuizSession } from "@/lib/server/live-quiz";
 
 export const runtime = "nodejs";
 
@@ -33,148 +39,130 @@ export async function POST(
     const { quizId } = await params;
     const { action, questionIndex, targetUid } = await parseBody(req, controlSchema);
 
-    const db = adminDb();
-    const quizRef = db.collection("quizzes").doc(quizId);
-    const quizSnap = await quizRef.get();
+    const quizData = await db.query.quizzes.findFirst({
+      where: eq(quizzes.id, quizId),
+    });
 
-    if (!quizSnap.exists) {
+    if (!quizData) {
       throw new ApiError(404, "Quiz not found.");
     }
 
-    const quizData = quizSnap.data()!;
-    const sessionRef = db.collection("liveQuizSessions").doc(quizId);
-    const sessionSnap = await sessionRef.get();
-    const currentSession = sessionSnap.data() || {};
+    const currentSession = await db.query.liveQuizSessions.findFirst({
+      where: eq(liveQuizSessions.quizId, quizId),
+    });
+
+    const now = Date.now();
 
     if (action === "start") {
-      await quizRef.update({ status: "live", mode: "live" });
-      await sessionRef.set({
-        quizId,
-        quizTitle: quizData.title,
-        status: "active",
-        viewState: "question",
-        currentQuestionIndex: 0,
-        questionStartAtMs: Date.now(),
-        questionDurationSeconds: quizData.durationSeconds || 30,
-        revealAnswer: false,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-    } else if (action === "setQuestion") {
-      const idx = questionIndex ?? 0;
-      await sessionRef.set(
-        {
+      await db.update(quizzes).set({ status: "live", mode: "live", updatedAt: now }).where(eq(quizzes.id, quizId));
+      if (currentSession) {
+        await db
+          .update(liveQuizSessions)
+          .set({
+            status: "active",
+            viewState: "question",
+            currentQuestionIndex: 0,
+            questionStartAtMs: now,
+            questionDurationSeconds: quizData.durationSeconds || 30,
+            revealAnswer: false,
+            updatedAt: now,
+          })
+          .where(eq(liveQuizSessions.quizId, quizId));
+      } else {
+        await db.insert(liveQuizSessions).values({
           quizId,
           quizTitle: quizData.title,
           status: "active",
           viewState: "question",
-          currentQuestionIndex: idx,
-          questionStartAtMs: Date.now(),
+          currentQuestionIndex: 0,
+          questionStartAtMs: now,
+          questionDurationSeconds: quizData.durationSeconds || 30,
           revealAnswer: false,
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
-    } else if (action === "toggleAnswer") {
-      await sessionRef.set(
-        {
-          revealAnswer: !currentSession.revealAnswer,
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
-    } else if (action === "showLeaderboard") {
-      await sessionRef.set(
-        {
-          viewState: "leaderboard",
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
-    } else if (action === "hideLeaderboard") {
-      await sessionRef.set(
-        {
+          updatedAt: now,
+        });
+      }
+    } else if (action === "setQuestion") {
+      const idx = questionIndex ?? 0;
+      await db
+        .update(liveQuizSessions)
+        .set({
+          status: "active",
           viewState: "question",
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
+          currentQuestionIndex: idx,
+          questionStartAtMs: now,
+          revealAnswer: false,
+          updatedAt: now,
+        })
+        .where(eq(liveQuizSessions.quizId, quizId));
+    } else if (action === "toggleAnswer") {
+      await db
+        .update(liveQuizSessions)
+        .set({
+          revealAnswer: !currentSession?.revealAnswer,
+          updatedAt: now,
+        })
+        .where(eq(liveQuizSessions.quizId, quizId));
+    } else if (action === "showLeaderboard") {
+      await db
+        .update(liveQuizSessions)
+        .set({
+          viewState: "leaderboard",
+          updatedAt: now,
+        })
+        .where(eq(liveQuizSessions.quizId, quizId));
+    } else if (action === "hideLeaderboard") {
+      await db
+        .update(liveQuizSessions)
+        .set({
+          viewState: "question",
+          updatedAt: now,
+        })
+        .where(eq(liveQuizSessions.quizId, quizId));
     } else if (action === "kickParticipant") {
       if (!targetUid) throw new ApiError(400, "Missing targetUid to kick.");
-      // Mark as kicked in participants collection
-      const participantRef = sessionRef.collection("participants").doc(targetUid);
-      await participantRef.set(
-        { kicked: true, updatedAt: FieldValue.serverTimestamp() },
-        { merge: true }
-      );
-      // Remove any responses
-      const responseRef = sessionRef.collection("responses").doc(targetUid);
-      await responseRef.delete();
-      // Trigger session update
-      await sessionRef.set(
-        { lastAnswerAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() },
-        { merge: true }
-      );
-    } else if (action === "end") {
-      // Idempotent: a double "End" click must not award coins twice.
-      if (currentSession.status !== "ended") {
-        await quizRef.update({ status: "closed" });
-        await sessionRef.set(
-          { status: "ended", viewState: "leaderboard", updatedAt: FieldValue.serverTimestamp() },
-          { merge: true }
+      await db
+        .update(liveQuizParticipants)
+        .set({ kicked: true })
+        .where(
+          and(
+            eq(liveQuizParticipants.quizId, quizId),
+            eq(liveQuizParticipants.uid, targetUid)
+          )
         );
-
-        const questions = await getQuizQuestions(quizId);
-        const maxScore = questions.reduce((s, q) => s + q.points, 0);
-        const xpRewardTotal = quizData.xpReward ?? (maxScore * 10 || 100);
-        const coinsPerPoint = quizData.coinsPerPoint ?? 1;
-
-        const responsesSnap = await sessionRef.collection("responses").get();
-        for (const doc of responsesSnap.docs) {
-          const score = Math.max(0, Math.min(maxScore, doc.data().totalScore ?? 0));
-          if (score <= 0) continue;
-
-          const coinsEarned = Math.round(score * coinsPerPoint);
-          const accuracyRatio = maxScore > 0 ? score / maxScore : 0;
-          const xpEarned = Math.round(accuracyRatio * xpRewardTotal);
-          if (coinsEarned <= 0 && xpEarned <= 0) continue;
-
-          try {
-            await awardCoins({
-              uid: doc.id,
-              amount: Math.max(1, coinsEarned),
-              xpAmount: xpEarned,
-              source: "quiz",
-              reason: `Live Stage Quiz: ${quizData.title}`,
-              refId: quizId,
-              awardedBy: "system",
-              counters: { quizzesTaken: 1 },
-            });
-          } catch (err) {
-            console.error("[live-quiz] award failed for", doc.id, err);
-          }
-        }
+      await db
+        .delete(liveQuizResponses)
+        .where(
+          and(
+            eq(liveQuizResponses.quizId, quizId),
+            eq(liveQuizResponses.uid, targetUid)
+          )
+        );
+      await db
+        .update(liveQuizSessions)
+        .set({ lastAnswerAt: now, updatedAt: now })
+        .where(eq(liveQuizSessions.quizId, quizId));
+    } else if (action === "end") {
+      if (currentSession?.status !== "ended") {
+        await endLiveQuizSession(quizId, quizData);
       }
     } else if (action === "relaunch") {
-      await quizRef.update({ status: "live", mode: "live" });
-      await sessionRef.set({
-        quizId,
-        quizTitle: quizData.title,
-        status: "waiting",
-        viewState: "lobby",
-        currentQuestionIndex: 0,
-        questionStartAtMs: Date.now(),
-        questionDurationSeconds: quizData.durationSeconds || 30,
-        revealAnswer: false,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-      const responsesSnap = await sessionRef.collection("responses").get();
-      const batch = db.batch();
-      responsesSnap.docs.forEach((d) => batch.delete(d.ref));
-      const participantsSnap = await sessionRef.collection("participants").get();
-      participantsSnap.docs.forEach((d) => batch.delete(d.ref));
-      if (responsesSnap.docs.length > 0 || participantsSnap.docs.length > 0) {
-        await batch.commit();
+      await db.update(quizzes).set({ status: "live", mode: "live", updatedAt: now }).where(eq(quizzes.id, quizId));
+      if (currentSession) {
+        await db
+          .update(liveQuizSessions)
+          .set({
+            status: "waiting",
+            viewState: "lobby",
+            currentQuestionIndex: 0,
+            questionStartAtMs: now,
+            questionDurationSeconds: quizData.durationSeconds || 30,
+            revealAnswer: false,
+            updatedAt: now,
+          })
+          .where(eq(liveQuizSessions.quizId, quizId));
       }
+      await db.delete(liveQuizResponses).where(eq(liveQuizResponses.quizId, quizId));
+      await db.delete(liveQuizParticipants).where(eq(liveQuizParticipants.quizId, quizId));
     }
 
     await audit({
@@ -185,7 +173,10 @@ export async function POST(
       details: { questionIndex, targetUid },
     });
 
-    const updatedSessionSnap = await sessionRef.get();
-    return jsonOk({ session: updatedSessionSnap.data() });
+    const updatedSession = await db.query.liveQuizSessions.findFirst({
+      where: eq(liveQuizSessions.quizId, quizId),
+    });
+    return jsonOk({ session: updatedSession });
   });
 }
+

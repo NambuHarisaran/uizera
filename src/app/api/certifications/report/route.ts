@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
-import { adminDb, FieldValue } from "@/lib/firebase/admin";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { certProgram, certProgress } from "@/lib/db/schema";
 import {
   ApiError,
   assertSameOrigin,
@@ -10,15 +12,12 @@ import {
 } from "@/lib/server/api";
 import { rateLimit } from "@/lib/server/rate-limit";
 import { certReportSchema } from "@/lib/validation";
-import { toMillis } from "@/lib/utils";
-import type { CertDay } from "@/types";
 
 export const runtime = "nodejs";
 
 /**
  * POST /api/certifications/report
- * Student reports a certification day as done. This only marks it "reported" —
- * coins and completion status are granted exclusively by admin verification.
+ * Student reports a certification day as done in Cloudflare D1.
  */
 export async function POST(req: NextRequest) {
   return handleApi(async () => {
@@ -28,45 +27,47 @@ export async function POST(req: NextRequest) {
 
     const { dayId } = await parseBody(req, certReportSchema);
 
-    const db = adminDb();
-    const daySnap = await db.collection("certProgram").doc(dayId).get();
-    if (!daySnap.exists) throw new ApiError(404, "Certification day not found.");
-    const day = daySnap.data() as CertDay;
+    const [day, existingProgress] = await Promise.all([
+      db.query.certProgram.findFirst({
+        where: eq(certProgram.dayId, dayId),
+      }),
+      db.query.certProgress.findFirst({
+        where: and(
+          eq(certProgress.uid, user.uid),
+          eq(certProgress.dayId, dayId)
+        ),
+      }),
+    ]);
 
-    if (Date.now() < toMillis(day.unlockDate)) {
-      throw new ApiError(400, "This day is still locked.");
+    if (!day) throw new ApiError(404, "Certification day not found.");
+
+    if (existingProgress && existingProgress.completed) {
+      throw new ApiError(400, "This day is already verified as completed.");
     }
 
-    const progressRef = db.collection("certProgress").doc(user.uid);
-
-    await db.runTransaction(async (tx) => {
-      const snap = await tx.get(progressRef);
-      const days =
-        (snap.data()?.days as Record<string, { status: string }> | undefined) ??
-        {};
-
-      if (days[dayId]?.status === "completed") {
-        throw new ApiError(400, "This day is already verified as completed.");
-      }
-
-      tx.set(
-        progressRef,
-        {
-          uid: user.uid,
-          days: {
-            ...days,
-            [dayId]: {
-              ...(days[dayId] ?? {}),
-              status: "reported",
-              reportedAt: new Date(),
-            },
-          },
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
-    });
+    const now = Date.now();
+    if (existingProgress) {
+      await db
+        .update(certProgress)
+        .set({
+          completed: false,
+        })
+        .where(
+          and(
+            eq(certProgress.uid, user.uid),
+            eq(certProgress.dayId, dayId)
+          )
+        );
+    } else {
+      await db.insert(certProgress).values({
+        uid: user.uid,
+        dayId,
+        completed: false,
+        completedAt: null,
+      });
+    }
 
     return jsonOk({ dayId, status: "reported" });
   });
 }
+

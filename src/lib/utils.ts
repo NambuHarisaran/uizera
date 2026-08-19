@@ -26,12 +26,13 @@ export function formatCoins(n: number): string {
   return new Intl.NumberFormat("en-IN").format(n);
 }
 
-export function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
+export function initials(name?: string | null): string {
+  if (!name || typeof name !== "string") return "U";
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "U";
+  return parts
     .slice(0, 2)
-    .map((w) => w[0]!.toUpperCase())
+    .map((w) => w[0]?.toUpperCase() ?? "")
     .join("");
 }
 
@@ -104,15 +105,60 @@ export function formatDuration(totalSeconds: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-export function truncate(text: string, max: number): string {
+export function truncate(text?: string | null, max = 16): string {
+  if (!text) return "";
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }
 
-/** First name only, for tight UI spaces (leaderboards, stage rosters). Full name still belongs in a title attr. */
-export function shortName(name: string, maxLen = 16): string {
-  const first = name.trim().split(/\s+/)[0] ?? name;
-  return truncate(first, maxLen);
+export function toTitleCase(str: string): string {
+
+  if (!str) return "";
+  if (str.length <= 2 && (str.includes(".") || str.length === 1)) return str.toUpperCase();
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 }
+
+/** Cleans affiliation suffixes and normalizes dot initials. */
+export function cleanDisplayName(name?: string | null): string {
+  if (!name || typeof name !== "string") return "Member";
+  let cleaned = name
+    .replace(/\s+(IEI\s+student\s+member|CB\s+student|EEE\s+student|ECE\s+student|student\s+member|student)$/i, "")
+    .trim();
+  // Normalize dot-attached names like "M.GOPINATH" -> "M. GOPINATH" or "AHALYA.S" -> "AHALYA S"
+  cleaned = cleaned.replace(/^([A-Za-z]\.)([A-Za-z]+)/, "$1 $2");
+  cleaned = cleaned.replace(/([A-Za-z]+)\.([A-Za-z]+)/, "$1 $2");
+  return cleaned.trim() || "Member";
+}
+
+/** 
+ * Clean formatted short name for leaderboards, podiums, and live rosters:
+ * - Prevents single letter/dot clipping (e.g., "P." -> "P. Varshini")
+ * - Formats uppercase names into clean Title Case
+ * - Clamps neatly between 6-16 characters
+ */
+export function shortName(name?: string | null, maxLen = 16): string {
+  if (!name || typeof name !== "string") return "Member";
+  const cleaned = cleanDisplayName(name);
+  const parts = cleaned.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "Member";
+
+  let formatted = "";
+  if (parts.length >= 2) {
+    const p0 = parts[0]!;
+    const p1 = parts[1]!;
+    // If the first part is just an initial (e.g. "P.", "M.", "R", "K.G.")
+    if (p0.length <= 2 || p0.endsWith(".")) {
+      formatted = `${toTitleCase(p0)} ${toTitleCase(p1)}`;
+    } else {
+      formatted = toTitleCase(p0);
+    }
+  } else {
+    formatted = toTitleCase(parts[0]!);
+  }
+
+  return truncate(formatted, maxLen);
+}
+
+
 
 /** Fisher–Yates shuffle returning a NEW array (crypto-quality not required here). */
 export function shuffle<T>(arr: readonly T[]): T[] {

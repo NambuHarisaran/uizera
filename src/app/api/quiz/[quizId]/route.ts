@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
-import { adminDb } from "@/lib/firebase/admin";
+import { and, desc, eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { quizAttempts } from "@/lib/db/schema";
 import { ApiError, handleApi, jsonOk, requireUser } from "@/lib/server/api";
 import { isAdminRole } from "@/lib/auth/session";
 import { getQuizOrThrow } from "@/lib/server/quiz";
@@ -7,8 +9,7 @@ import { getQuizOrThrow } from "@/lib/server/quiz";
 export const runtime = "nodejs";
 
 /**
- * GET /api/quiz/[quizId] — quiz detail + the caller's latest attempt.
- * Drafts stay invisible to students; admins may preview them.
+ * GET /api/quiz/[quizId] — quiz detail + the caller's latest attempt from Cloudflare D1.
  */
 export async function GET(
   _req: NextRequest,
@@ -20,35 +21,46 @@ export async function GET(
 
     const quiz = await getQuizOrThrow(quizId);
     if (!isAdminRole(user.role)) {
-      // Draft quizzes aren't published yet; live-session quizzes are only
-      // ever reachable through the Live Stage link/QR, never this self-paced
-      // flow — both stay a plain 404 to non-admins.
       if (quiz.status === "draft" || quiz.mode === "live") {
         throw new ApiError(404, "Quiz not found.");
       }
     }
 
-    // Latest attempt lives at a deterministic id derived from the per-user
-    // counter, so no composite index is needed.
-    const counterSnap = await adminDb()
-      .collection("quizzes")
-      .doc(quizId)
-      .collection("attemptCounters")
-      .doc(user.uid)
-      .get();
-    const count = (counterSnap.data()?.count as number | undefined) ?? 0;
+    // Fetch caller's latest attempt for this quiz from D1
+    const latestAttempt = await db.query.quizAttempts.findFirst({
+      where: and(
+        eq(quizAttempts.quizId, quizId),
+        eq(quizAttempts.uid, user.uid)
+      ),
+      orderBy: [desc(quizAttempts.attemptNo)],
+    });
 
-    let attempt: Record<string, unknown> | null = null;
-    if (count > 0) {
-      const attemptSnap = await adminDb()
-        .collection("quizAttempts")
-        .doc(`${quizId}_${user.uid}_${count}`)
-        .get();
-      if (attemptSnap.exists) {
-        attempt = { id: attemptSnap.id, ...attemptSnap.data() };
+    let formattedAttempt: Record<string, unknown> | null = null;
+    if (latestAttempt) {
+      let answers: any = {};
+      let questionOrder: string[] = [];
+      let optionOrders: Record<string, number[]> = {};
+
+      try {
+        answers = JSON.parse(latestAttempt.answers ?? "{}");
+        questionOrder = JSON.parse(latestAttempt.questionOrder ?? "[]");
+        optionOrders = JSON.parse(latestAttempt.optionOrders ?? "{}");
+      } catch {
+        // fallback
       }
+
+      formattedAttempt = {
+        ...latestAttempt,
+        answers,
+        questionOrder,
+        optionOrders,
+        startedAt: latestAttempt.startedAt ? new Date(latestAttempt.startedAt) : null,
+        deadlineAt: latestAttempt.deadlineAt ? new Date(latestAttempt.deadlineAt) : null,
+        submittedAt: latestAttempt.submittedAt ? new Date(latestAttempt.submittedAt) : null,
+      };
     }
 
-    return jsonOk({ quiz, attempt });
+    return jsonOk({ quiz, attempt: formattedAttempt });
   });
 }
+

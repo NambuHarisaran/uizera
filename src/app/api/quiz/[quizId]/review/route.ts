@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
-import { adminDb } from "@/lib/firebase/admin";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { quizAttempts } from "@/lib/db/schema";
 import {
   ApiError,
   handleApi,
@@ -12,16 +14,12 @@ import {
   getQuizOrThrow,
   getQuizQuestions,
 } from "@/lib/server/quiz";
-import { toMillis } from "@/lib/utils";
-import type { QuizAttempt } from "@/types";
 
 export const runtime = "nodejs";
 
 /**
  * GET /api/quiz/[quizId]/review?attempt=<attemptId>
- *
- * Answer review is only released once the quiz window has fully ended, so a
- * fast finisher can never leak answers to students still playing.
+ * Review submitted attempt from Cloudflare D1.
  */
 export async function GET(
   req: NextRequest,
@@ -40,16 +38,29 @@ export async function GET(
       throw new ApiError(403, "This attempt does not belong to you.");
     }
 
-    const quiz = await getQuizOrThrow(quizId);
-    const snap = await adminDb().collection("quizAttempts").doc(attemptId).get();
-    if (!snap.exists) throw new ApiError(404, "Attempt not found.");
-    const attempt = snap.data() as QuizAttempt;
+    const [quiz, attempt] = await Promise.all([
+      getQuizOrThrow(quizId),
+      db.query.quizAttempts.findFirst({
+        where: eq(quizAttempts.id, attemptId),
+      }),
+    ]);
+
+    if (!attempt) throw new ApiError(404, "Attempt not found.");
     if (attempt.uid !== user.uid) {
       throw new ApiError(403, "This attempt does not belong to you.");
     }
     if (attempt.status !== "submitted") {
       throw new ApiError(400, "Only submitted attempts can be reviewed.");
     }
+
+    let parsedAnswers: any = {};
+    let parsedQuestionOrder: string[] = [];
+    let parsedOptionOrders: Record<string, number[]> = {};
+    try {
+      parsedAnswers = JSON.parse(attempt.answers ?? "{}");
+      parsedQuestionOrder = JSON.parse(attempt.questionOrder ?? "[]");
+      parsedOptionOrders = JSON.parse(attempt.optionOrders ?? "{}");
+    } catch {}
 
     const [questions, answerKey] = await Promise.all([
       getQuizQuestions(quizId),
@@ -58,22 +69,21 @@ export async function GET(
 
     const ordered = buildAttemptQuestions(
       questions,
-      attempt.questionOrder,
-      attempt.optionOrders
+      parsedQuestionOrder,
+      parsedOptionOrders
     );
 
     const items = ordered.map((q) => {
       const key = answerKey[q.id];
-      const order = attempt.optionOrders[q.id] ?? q.options.map((_, i) => i);
-      // original correct index → display index for this attempt's shuffle.
+      const order = parsedOptionOrders[q.id] ?? q.options.map((_, i) => i);
       const correctDisplay = (key?.correct ?? [])
         .map((orig) => order.indexOf(orig))
         .filter((i) => i >= 0);
-      const selectedDisplay = attempt.answers[q.id] ?? [];
+      const selectedDisplay = parsedAnswers[q.id] ?? [];
 
       const exact =
         correctDisplay.length === selectedDisplay.length &&
-        correctDisplay.every((c) => selectedDisplay.includes(c));
+        correctDisplay.every((c: number) => selectedDisplay.includes(c));
 
       return {
         question: q,
@@ -88,8 +98,12 @@ export async function GET(
       attempt: {
         ...attempt,
         quizTitle: quiz.title,
+        answers: parsedAnswers,
+        startedAt: attempt.startedAt ? new Date(attempt.startedAt) : null,
+        submittedAt: attempt.submittedAt ? new Date(attempt.submittedAt) : null,
       },
       items,
     });
   });
 }
+

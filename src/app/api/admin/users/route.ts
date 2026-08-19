@@ -1,12 +1,14 @@
 import { NextRequest } from "next/server";
-import { adminDb } from "@/lib/firebase/admin";
+import { desc, like, or } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { users } from "@/lib/db/schema";
 import { handleApi, jsonOk, requireAdmin } from "@/lib/server/api";
 
 export const runtime = "nodejs";
 
 /**
- * GET /api/admin/users?q=<prefix>&limit=<n>
- * Search members by email or display-name prefix (admin only).
+ * GET /api/admin/users?q=<search>&limit=<n>
+ * Search members from Cloudflare D1 users table.
  */
 export async function GET(req: NextRequest) {
   return handleApi(async () => {
@@ -18,34 +20,36 @@ export async function GET(req: NextRequest) {
       200
     );
 
-    const users = adminDb().collection("users");
-    let docs;
-
+    let rows;
     if (q) {
-      const lower = q.toLowerCase();
-      const [byEmail, byName] = await Promise.all([
-        users
-          .where("email", ">=", lower)
-          .where("email", "<=", `${lower}`)
-          .limit(limit)
-          .get(),
-        users
-          .where("displayName", ">=", q)
-          .where("displayName", "<=", `${q}`)
-          .limit(limit)
-          .get(),
-      ]);
-      const map = new Map(
-        [...byEmail.docs, ...byName.docs].map((d) => [d.id, d])
-      );
-      docs = [...map.values()];
+      rows = await db.query.users.findMany({
+        where: or(
+          like(users.email, `%${q.toLowerCase()}%`),
+          like(users.displayName, `%${q}%`)
+        ),
+        orderBy: [desc(users.createdAt)],
+        limit,
+      });
     } else {
-      const snap = await users.orderBy("createdAt", "desc").limit(limit).get();
-      docs = snap.docs;
+      rows = await db.query.users.findMany({
+        orderBy: [desc(users.createdAt)],
+        limit,
+      });
     }
 
-    return jsonOk({
-      users: docs.map((d) => ({ ...d.data(), uid: d.id })),
+    const formatted = rows.map((u) => {
+      let badges: string[] = [];
+      try {
+        badges = JSON.parse(u.badges ?? "[]");
+      } catch {}
+      return {
+        ...u,
+        badges,
+        disabled: Boolean(u.disabled),
+      };
     });
+
+    return jsonOk({ users: formatted });
   });
 }
+

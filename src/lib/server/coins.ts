@@ -1,6 +1,8 @@
 import "server-only";
 
-import { adminDb, FieldValue } from "@/lib/firebase/admin";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { users, coinTransactions } from "@/lib/db/schema";
 import { ApiError } from "@/lib/server/api";
 import { levelForXp } from "@/lib/utils";
 import type { AppUser, CoinSource } from "@/types";
@@ -50,46 +52,50 @@ function thresholdBadges(u: {
 }
 
 /**
- * Bump stat counters and re-evaluate badges WITHOUT touching coins — used for
- * zero-coin outcomes (e.g. a 0-score quiz still counts as taken).
+ * Bump stat counters and re-evaluate badges WITHOUT touching coins.
  */
 export async function bumpStats(
   uid: string,
   counters: NonNullable<AwardOptions["counters"]>,
   extraBadges: string[] = []
 ): Promise<void> {
-  const db = adminDb();
-  const userRef = db.collection("users").doc(uid);
-
-  await db.runTransaction(async (tx) => {
-    const snap = await tx.get(userRef);
-    if (!snap.exists) return;
-    const user = snap.data() as AppUser;
-
-    const next = {
-      quizzesTaken: (user.quizzesTaken ?? 0) + (counters.quizzesTaken ?? 0),
-      challengesApproved:
-        (user.challengesApproved ?? 0) + (counters.challengesApproved ?? 0),
-      certsCompleted: (user.certsCompleted ?? 0) + (counters.certsCompleted ?? 0),
-    };
-
-    const existing = new Set(user.badges ?? []);
-    const candidates = [
-      ...thresholdBadges({ xp: user.xp ?? 0, ...next }),
-      ...extraBadges,
-    ];
-    const badges = [...existing, ...candidates.filter((b) => !existing.has(b))];
-
-    tx.update(userRef, { ...next, badges });
+  const user = await db.query.users.findFirst({
+    where: eq(users.uid, uid),
   });
+  if (!user) return;
+
+  const next = {
+    quizzesTaken: (user.quizzesTaken ?? 0) + (counters.quizzesTaken ?? 0),
+    challengesApproved:
+      (user.challengesApproved ?? 0) + (counters.challengesApproved ?? 0),
+    certsCompleted: (user.certsCompleted ?? 0) + (counters.certsCompleted ?? 0),
+  };
+
+  let existingBadges: string[] = [];
+  try {
+    existingBadges = JSON.parse(user.badges ?? "[]");
+  } catch {
+    existingBadges = [];
+  }
+
+  const existingSet = new Set(existingBadges);
+  const candidates = [
+    ...thresholdBadges({ xp: user.xp ?? 0, ...next }),
+    ...extraBadges,
+  ];
+  const badges = [...existingSet, ...candidates.filter((b) => !existingSet.has(b))];
+
+  await db
+    .update(users)
+    .set({
+      ...next,
+      badges: JSON.stringify(badges),
+    })
+    .where(eq(users.uid, uid));
 }
 
 /**
- * Atomically award (or adjust) coins for a user.
- *
- * The ONLY code path in the entire system that changes a coin balance.
- * Runs in a Firestore transaction: balance update, counters, badges, and the
- * append-only ledger entry all commit together or not at all.
+ * Atomically award (or adjust) coins for a user in Cloudflare D1.
  */
 export async function awardCoins(opts: AwardOptions): Promise<AwardResult> {
   const amount = Math.trunc(opts.amount);
@@ -103,60 +109,71 @@ export async function awardCoins(opts: AwardOptions): Promise<AwardResult> {
     throw new ApiError(400, "Only admin adjustments may deduct coins.");
   }
 
-  const db = adminDb();
-  const userRef = db.collection("users").doc(opts.uid);
-  const txRef = db.collection("coinTransactions").doc();
+  const user = await db.query.users.findFirst({
+    where: eq(users.uid, opts.uid),
+  });
+  if (!user) throw new ApiError(404, "User not found.");
+  if (user.disabled) throw new ApiError(400, "This account is disabled.");
 
-  return db.runTransaction(async (tx) => {
-    const snap = await tx.get(userRef);
-    if (!snap.exists) throw new ApiError(404, "User not found.");
-    const user = snap.data() as AppUser;
-    if (user.disabled) throw new ApiError(400, "This account is disabled.");
+  const coins = Math.max(0, (user.coins ?? 0) + amount);
+  const weeklyCoins = Math.max(0, (user.weeklyCoins ?? 0) + amount);
+  const monthlyCoins = Math.max(0, (user.monthlyCoins ?? 0) + amount);
+  const xpGain = opts.xpAmount !== undefined ? Math.max(0, opts.xpAmount) : Math.max(0, amount);
+  const xp = (user.xp ?? 0) + xpGain;
+  const level = levelForXp(xp);
 
-    const coins = Math.max(0, (user.coins ?? 0) + amount);
-    const weeklyCoins = Math.max(0, (user.weeklyCoins ?? 0) + amount);
-    const monthlyCoins = Math.max(0, (user.monthlyCoins ?? 0) + amount);
-    // XP is lifetime-earned: it only ever grows.
-    const xpGain = opts.xpAmount !== undefined ? Math.max(0, opts.xpAmount) : Math.max(0, amount);
-    const xp = (user.xp ?? 0) + xpGain;
-    const level = levelForXp(xp);
+  const counters = {
+    quizzesTaken: (user.quizzesTaken ?? 0) + (opts.counters?.quizzesTaken ?? 0),
+    challengesApproved:
+      (user.challengesApproved ?? 0) + (opts.counters?.challengesApproved ?? 0),
+    certsCompleted: (user.certsCompleted ?? 0) + (opts.counters?.certsCompleted ?? 0),
+  };
 
-    const counters = {
-      quizzesTaken: (user.quizzesTaken ?? 0) + (opts.counters?.quizzesTaken ?? 0),
-      challengesApproved:
-        (user.challengesApproved ?? 0) + (opts.counters?.challengesApproved ?? 0),
-      certsCompleted: (user.certsCompleted ?? 0) + (opts.counters?.certsCompleted ?? 0),
-    };
+  let existingBadges: string[] = [];
+  try {
+    existingBadges = JSON.parse(user.badges ?? "[]");
+  } catch {
+    existingBadges = [];
+  }
 
-    const existing = new Set(user.badges ?? []);
-    const candidates = [
-      ...thresholdBadges({ xp, ...counters }),
-      ...(opts.extraBadges ?? []),
-    ];
-    const newBadges = candidates.filter((b) => !existing.has(b));
-    const badges = [...existing, ...newBadges];
+  const existingSet = new Set(existingBadges);
+  const candidates = [
+    ...thresholdBadges({ xp, ...counters }),
+    ...(opts.extraBadges ?? []),
+  ];
+  const newBadges = candidates.filter((b) => !existingSet.has(b));
+  const badges = [...existingSet, ...newBadges];
 
-    tx.update(userRef, {
+  const now = Date.now();
+  const txId = `tx_${now}_${Math.random().toString(36).slice(2, 9)}`;
+
+  // Update user in D1
+  await db
+    .update(users)
+    .set({
       coins,
       weeklyCoins,
       monthlyCoins,
       xp,
       level,
-      badges,
+      badges: JSON.stringify(badges),
       ...counters,
-    });
+    })
+    .where(eq(users.uid, opts.uid));
 
-    tx.set(txRef, {
-      uid: opts.uid,
-      displayName: user.displayName ?? "Member",
-      amount,
-      source: opts.source,
-      reason: opts.reason.slice(0, 500),
-      refId: opts.refId ?? null,
-      awardedBy: opts.awardedBy,
-      createdAt: FieldValue.serverTimestamp(),
-    });
-
-    return { newBalance: coins, newBadges };
+  // Insert transaction entry in D1
+  await db.insert(coinTransactions).values({
+    id: txId,
+    uid: opts.uid,
+    displayName: user.displayName ?? "Member",
+    amount,
+    source: opts.source,
+    reason: opts.reason.slice(0, 500),
+    refId: opts.refId ?? null,
+    awardedBy: opts.awardedBy,
+    createdAt: now,
   });
+
+  return { newBalance: coins, newBadges };
 }
+

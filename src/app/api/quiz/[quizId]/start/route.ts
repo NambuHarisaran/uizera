@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
-import { adminDb, FieldValue, Timestamp } from "@/lib/firebase/admin";
+import { and, desc, eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { quizAttempts, users } from "@/lib/db/schema";
 import {
   ApiError,
   assertSameOrigin,
@@ -19,19 +21,10 @@ import { toMillis } from "@/lib/utils";
 import type { QuizAttempt } from "@/types";
 
 export const runtime = "nodejs";
-export const maxDuration = 10; // Vercel free tier cap
 
 /**
  * POST /api/quiz/[quizId]/start
- *
- * Starts (or resumes) a quiz attempt. Attempt limits are enforced in a
- * Firestore transaction on a per-user counter document, so parallel requests
- * cannot mint extra attempts. Question/option order is randomized server-side
- * per attempt and stored, so a resume shows the identical arrangement and
- * clients never influence ordering.
- *
- * Pre-transaction reads (quiz, questions, user profile) are parallelized so
- * latency is bounded by the slowest single read rather than their sum.
+ * Starts or resumes a quiz attempt in Cloudflare D1.
  */
 export async function POST(
   req: NextRequest,
@@ -45,11 +38,10 @@ export async function POST(
 
     const now = Date.now();
 
-    // Parallel pre-transaction reads: quiz meta, questions, and user displayName
-    const [quiz, questions, userSnap] = await Promise.all([
+    const [quiz, questions, userRecord] = await Promise.all([
       getQuizOrThrow(quizId),
       getQuizQuestions(quizId),
-      adminDb().collection("users").doc(user.uid).get(),
+      db.query.users.findFirst({ where: eq(users.uid, user.uid) }),
     ]);
 
     assertQuizOpen(quiz, now);
@@ -58,91 +50,92 @@ export async function POST(
       throw new ApiError(500, "Quiz has no questions yet.");
     }
 
-    const displayName =
-      (userSnap.data()?.displayName as string | undefined) || "Member";
+    const displayName = userRecord?.displayName || "Member";
 
-    const db = adminDb();
-    const counterRef = db
-      .collection("quizzes")
-      .doc(quizId)
-      .collection("attemptCounters")
-      .doc(user.uid);
-
-    const result = await db.runTransaction(async (tx) => {
-      const counterSnap = await tx.get(counterRef);
-      const count = (counterSnap.data()?.count as number | undefined) ?? 0;
-
-      // Resume an in-progress attempt if it is still inside its window.
-      if (count > 0) {
-        const lastRef = db
-          .collection("quizAttempts")
-          .doc(`${quizId}_${user.uid}_${count}`);
-        const lastSnap = await tx.get(lastRef);
-        if (lastSnap.exists) {
-          const last = lastSnap.data() as QuizAttempt;
-          if (last.status === "in_progress" && now < toMillis(last.deadlineAt)) {
-            return { attempt: { ...last, id: lastRef.id }, resumed: true };
-          }
-        }
-      }
-
-      if (count >= quiz.settings.maxAttempts) {
-        throw new ApiError(400, "You have used all attempts for this quiz.");
-      }
-
-      const attemptNo = count + 1;
-      const { questionOrder, optionOrders } = generateOrders(
-        questions,
-        quiz.settings.randomizeQuestions,
-        quiz.settings.randomizeOptions
-      );
-
-      const deadline = Math.min(
-        now + quiz.durationSeconds * 1000,
-        toMillis(quiz.endAt)
-      );
-
-      const attemptRef = db
-        .collection("quizAttempts")
-        .doc(`${quizId}_${user.uid}_${attemptNo}`);
-
-      const attempt: Omit<QuizAttempt, "startedAt" | "submittedAt"> & {
-        startedAt: FirebaseFirestore.FieldValue;
-        submittedAt: null;
-      } = {
-        id: attemptRef.id,
-        quizId,
-        quizTitle: quiz.title,
-        uid: user.uid,
-        displayName,
-        attemptNo,
-        status: "in_progress",
-        questionOrder,
-        optionOrders,
-        answers: {},
-        score: 0,
-        maxScore: questions.reduce((s, q) => s + q.points, 0),
-        correctCount: 0,
-        coinsEarned: 0,
-        startedAt: FieldValue.serverTimestamp(),
-        deadlineAt: Timestamp.fromMillis(deadline),
-        submittedAt: null,
-      };
-
-      tx.set(attemptRef, attempt);
-      tx.set(counterRef, { count: attemptNo, uid: user.uid }, { merge: true });
-
-      return {
-        attempt: { ...attempt, startedAt: now } as unknown as QuizAttempt,
-        resumed: false,
-      };
+    // Check existing attempts for this user and quiz
+    const existingAttempts = await db.query.quizAttempts.findMany({
+      where: and(
+        eq(quizAttempts.quizId, quizId),
+        eq(quizAttempts.uid, user.uid)
+      ),
+      orderBy: [desc(quizAttempts.attemptNo)],
     });
 
-    const view = buildAttemptQuestions(
+    const count = existingAttempts.length;
+    const latest = existingAttempts[0];
+
+    // Resume in-progress attempt if inside window
+    if (latest && latest.status === "in_progress" && now < latest.deadlineAt) {
+      let answers: any = {};
+      let questionOrder: string[] = [];
+      let optionOrders: Record<string, number[]> = {};
+      try {
+        answers = JSON.parse(latest.answers ?? "{}");
+        questionOrder = JSON.parse(latest.questionOrder ?? "[]");
+        optionOrders = JSON.parse(latest.optionOrders ?? "{}");
+      } catch {}
+
+      const view = buildAttemptQuestions(questions, questionOrder, optionOrders).map((q) => ({
+        id: q.id,
+        type: q.type,
+        prompt: q.prompt,
+        imageUrl: q.imageUrl,
+        options: q.options,
+        points: q.points,
+      }));
+
+      return jsonOk({
+        attemptId: latest.id,
+        resumed: true,
+        deadlineAt: latest.deadlineAt,
+        durationSeconds: quiz.durationSeconds,
+        maxScore: latest.maxScore,
+        questions: view,
+        answers,
+      });
+    }
+
+    const maxAttempts = quiz.settings?.maxAttempts ?? 1;
+    if (count >= maxAttempts) {
+      throw new ApiError(400, "You have used all attempts for this quiz.");
+    }
+
+    const attemptNo = count + 1;
+    const { questionOrder, optionOrders } = generateOrders(
       questions,
-      result.attempt.questionOrder,
-      result.attempt.optionOrders
-    ).map((q) => ({
+      Boolean(quiz.settings?.randomizeQuestions),
+      Boolean(quiz.settings?.randomizeOptions)
+    );
+
+    const deadline = Math.min(
+      now + quiz.durationSeconds * 1000,
+      toMillis(quiz.endAt)
+    );
+
+    const attemptId = `${quizId}_${user.uid}_${attemptNo}`;
+    const maxScore = questions.reduce((s, q) => s + q.points, 0);
+
+    await db.insert(quizAttempts).values({
+      id: attemptId,
+      quizId,
+      quizTitle: quiz.title,
+      uid: user.uid,
+      displayName,
+      attemptNo,
+      status: "in_progress",
+      questionOrder: JSON.stringify(questionOrder),
+      optionOrders: JSON.stringify(optionOrders),
+      answers: JSON.stringify({}),
+      score: 0,
+      maxScore,
+      correctCount: 0,
+      coinsEarned: 0,
+      startedAt: now,
+      deadlineAt: deadline,
+      submittedAt: null,
+    });
+
+    const view = buildAttemptQuestions(questions, questionOrder, optionOrders).map((q) => ({
       id: q.id,
       type: q.type,
       prompt: q.prompt,
@@ -152,14 +145,14 @@ export async function POST(
     }));
 
     return jsonOk({
-      attemptId: result.attempt.id,
-      resumed: result.resumed,
-      deadlineAt: toMillis(result.attempt.deadlineAt),
+      attemptId,
+      resumed: false,
+      deadlineAt: deadline,
       durationSeconds: quiz.durationSeconds,
-      maxScore: result.attempt.maxScore,
+      maxScore,
       questions: view,
-      // Return saved answers for seamless resume
-      answers: result.resumed ? result.attempt.answers : {},
+      answers: {},
     });
   });
 }
+

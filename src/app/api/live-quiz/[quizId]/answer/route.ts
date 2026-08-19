@@ -1,5 +1,11 @@
 import { NextRequest } from "next/server";
-import { adminDb, FieldValue } from "@/lib/firebase/admin";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import {
+  liveQuizSessions,
+  liveQuizResponses,
+  users,
+} from "@/lib/db/schema";
 import {
   ApiError,
   assertSameOrigin,
@@ -11,19 +17,12 @@ import {
 import { rateLimit } from "@/lib/server/rate-limit";
 import { getAnswerKey } from "@/lib/server/quiz";
 import { liveQuizAnswerSchema } from "@/lib/validation";
-import type { LiveQuizSession } from "@/types";
 
 export const runtime = "nodejs";
 
 /**
  * POST /api/live-quiz/[quizId]/answer
- *
- * Grades one participant's answer to the currently active stage question,
- * server-side against the private answer key — same trust model as the async
- * quiz submit route, just scoped to a single question instead of a whole
- * attempt. Rejected once the host advances, reveals, or already has an answer
- * on file for this question, so a slow client replaying a stale question
- * can't score points after the room has moved on.
+ * Grades one participant's answer to the active live stage question in Cloudflare D1.
  */
 export async function POST(
   req: NextRequest,
@@ -38,102 +37,110 @@ export async function POST(
 
     const body = await parseBody(req, liveQuizAnswerSchema);
 
-    const answerKey = await getAnswerKey(quizId);
+    const [answerKey, session, responseRecord, userRecord] = await Promise.all([
+      getAnswerKey(quizId),
+      db.query.liveQuizSessions.findFirst({
+        where: eq(liveQuizSessions.quizId, quizId),
+      }),
+      db.query.liveQuizResponses.findFirst({
+        where: and(
+          eq(liveQuizResponses.quizId, quizId),
+          eq(liveQuizResponses.uid, user.uid)
+        ),
+      }),
+      db.query.users.findFirst({
+        where: eq(users.uid, user.uid),
+      }),
+    ]);
+
     const key = answerKey[body.questionId];
     if (!key) throw new ApiError(404, "Question not found.");
+    if (!session) throw new ApiError(404, "Live session not found.");
 
-    const db = adminDb();
-    const sessionRef = db.collection("liveQuizSessions").doc(quizId);
-    const responseRef = sessionRef.collection("responses").doc(user.uid);
+    if (session.status !== "active") {
+      throw new ApiError(400, "This stage isn't accepting answers right now.");
+    }
+    if (session.currentQuestionIndex !== body.questionIndex) {
+      throw new ApiError(400, "That question is no longer active.");
+    }
+    if (session.revealAnswer) {
+      throw new ApiError(400, "Answers are locked for this question.");
+    }
 
-    const profileSnap = await db.collection("users").doc(user.uid).get();
-    const displayName =
-      (profileSnap.data()?.displayName as string | undefined) || "Participant";
+    let existingAnswers: Record<
+      string,
+      { selected: number[]; correct: boolean; points: number; answeredAtMs: number }
+    > = {};
+    try {
+      existingAnswers = JSON.parse(responseRecord?.answers ?? "{}");
+    } catch {}
 
-    const result = await db.runTransaction(async (tx) => {
-      const [sessionSnap, responseSnap] = await Promise.all([
-        tx.get(sessionRef),
-        tx.get(responseRef),
-      ]);
+    if (existingAnswers[body.questionId]) {
+      throw new ApiError(400, "You already answered this question.");
+    }
 
-      if (!sessionSnap.exists) throw new ApiError(404, "Live session not found.");
-      const session = sessionSnap.data() as LiveQuizSession;
+    const correctSet = new Set(key.correct);
+    const selectedSet = new Set(body.selected);
+    const isCorrect =
+      selectedSet.size === correctSet.size &&
+      [...correctSet].every((c) => selectedSet.has(c));
 
-      if (session.status !== "active") {
-        throw new ApiError(400, "This stage isn't accepting answers right now.");
-      }
-      if (session.currentQuestionIndex !== body.questionIndex) {
-        throw new ApiError(400, "That question is no longer active.");
-      }
-      if (session.revealAnswer) {
-        throw new ApiError(400, "Answers are locked for this question.");
-      }
+    const now = Date.now();
+    const elapsedMs = Math.max(0, now - (session.questionStartAtMs || now));
+    const durationMs = Math.max(1000, (session.questionDurationSeconds || 30) * 1000);
+    const speedFraction = Math.max(0, Math.min(1, 1 - elapsedMs / durationMs));
+    const pointsEarned = isCorrect ? Math.round(key.points * (0.5 + 0.5 * speedFraction)) : 0;
 
-      const existingAnswers = (responseSnap.data()?.answers ?? {}) as Record<
-        string,
-        { selected: number[]; correct: boolean; points: number; answeredAtMs: number }
-      >;
-      if (existingAnswers[body.questionId]) {
-        throw new ApiError(400, "You already answered this question.");
-      }
+    const newAnswers = {
+      ...existingAnswers,
+      [body.questionId]: {
+        selected: body.selected,
+        correct: isCorrect,
+        points: pointsEarned,
+        answeredAtMs: now,
+        elapsedMs,
+      },
+    };
 
-      const correctSet = new Set(key.correct);
-      const selectedSet = new Set(body.selected);
-      const isCorrect =
-        selectedSet.size === correctSet.size &&
-        [...correctSet].every((c) => selectedSet.has(c));
+    const newTotal = (responseRecord?.totalScore ?? 0) + pointsEarned;
+    const newTotalAnswerMs = (responseRecord?.totalAnswerMs ?? 0) + elapsedMs;
+    const displayName = userRecord?.displayName || user.email?.split("@")[0] || "Participant";
 
-      // Kahoot-style speed bonus: full points for an instant answer, floor of
-      // half credit right up to the buzzer.
-      const elapsedMs = Math.max(0, Date.now() - (session.questionStartAtMs ?? Date.now()));
-      const durationMs = Math.max(1000, (session.questionDurationSeconds ?? 30) * 1000);
-      const speedFraction = Math.max(0, Math.min(1, 1 - elapsedMs / durationMs));
-      const pointsEarned = isCorrect ? Math.round(key.points * (0.5 + 0.5 * speedFraction)) : 0;
-
-      const newAnswers = {
-        ...existingAnswers,
-        [body.questionId]: {
-          selected: body.selected,
-          correct: isCorrect,
-          points: pointsEarned,
-          answeredAtMs: Date.now(),
-          elapsedMs,
-        },
-      };
-      const newTotal = (responseSnap.data()?.totalScore ?? 0) + pointsEarned;
-      // Accumulate total answer time — lower = faster overall. Used as a
-      // tiebreaker when two players share the same score (fairer than arbitrary
-      // document order).
-      const newTotalAnswerMs = (responseSnap.data()?.totalAnswerMs ?? 0) + elapsedMs;
-
-      tx.set(
-        responseRef,
-        {
-          uid: user.uid,
+    if (responseRecord) {
+      await db
+        .update(liveQuizResponses)
+        .set({
           displayName,
-          answers: newAnswers,
+          answers: JSON.stringify(newAnswers),
           totalScore: newTotal,
           totalAnswerMs: newTotalAnswerMs,
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(liveQuizResponses.quizId, quizId),
+            eq(liveQuizResponses.uid, user.uid)
+          )
+        );
+    } else {
+      await db.insert(liveQuizResponses).values({
+        quizId,
+        uid: user.uid,
+        displayName,
+        answers: JSON.stringify(newAnswers),
+        totalScore: newTotal,
+        totalAnswerMs: newTotalAnswerMs,
+        updatedAt: now,
+      });
+    }
 
-      // Touch a field on the session doc instead, which every client already
-      // has an onSnapshot listener on, so the host's "X answered" count
-      // and everyone's live leaderboard update the instant anyone answers,
-      // no refresh needed.
-      tx.update(sessionRef, { lastAnswerAt: FieldValue.serverTimestamp() });
+    // Touch session updatedAt so polling devices pick up new answer counts
+    await db
+      .update(liveQuizSessions)
+      .set({ lastAnswerAt: now, updatedAt: now })
+      .where(eq(liveQuizSessions.quizId, quizId));
 
-      // ⚠️  Do NOT return isCorrect or pointsEarned here.
-      // Leaking the result before the host reveals it allows a student on one
-      // device to relay "correct!" to teammates on other devices — a real
-      // cheating vector. The correct answer is revealed to everyone at the
-      // same time when the host calls toggleAnswer (revealAnswer = true),
-      // at which point the client already has the full result via myAnswers.
-      return { received: true, totalScore: newTotal };
-    });
-
-    return jsonOk(result);
+    return jsonOk({ received: true, totalScore: newTotal });
   });
 }
+

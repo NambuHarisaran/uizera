@@ -10,6 +10,7 @@ import {
   FileText,
   LayoutDashboard,
   Megaphone,
+  Radio,
   Settings,
   Target,
   Users,
@@ -23,12 +24,14 @@ const sidebarLinks = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/quizzes", label: "Quizzes", icon: Zap },
+  { href: "/admin/live-quiz", label: "Live Quiz", icon: Radio },
   { href: "/admin/challenges", label: "Challenges", icon: Target },
   { href: "/admin/certifications", label: "Certifications", icon: Award },
   { href: "/admin/coins", label: "Award Coins", icon: Coins },
   { href: "/admin/content", label: "Content", icon: FileText },
   { href: "/admin/announcements", label: "Announcements", icon: Megaphone },
 ];
+
 
 export default function AdminLayout({
   children,

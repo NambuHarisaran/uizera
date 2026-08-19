@@ -1,65 +1,53 @@
 import { NextRequest } from "next/server";
-import { adminDb } from "@/lib/firebase/admin";
+import { desc, eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { users } from "@/lib/db/schema";
 import { handleApi, jsonOk } from "@/lib/server/api";
 import type { LeaderboardPeriod } from "@/types";
 
 export const runtime = "nodejs";
 
-const SORT_FIELDS: Record<LeaderboardPeriod, string> = {
-  overall: "coins",
-  weekly: "weeklyCoins",
-  monthly: "monthlyCoins",
-};
-
 /**
  * GET /api/leaderboard?period=overall|weekly|monthly
- * Public — returns the top 100 entries from the users collection.
- * Includes graceful fallback if composite indexes are building in Firestore.
+ * Top 100 entries from Cloudflare D1 users table.
  */
 export async function GET(req: NextRequest) {
   return handleApi(async () => {
     const period = (req.nextUrl.searchParams.get("period") ?? "overall") as LeaderboardPeriod;
-    const sortField = SORT_FIELDS[period] ?? "coins";
 
-    let docs;
-    try {
-      // Indexed query
-      const snap = await adminDb()
-        .collection("users")
-        .where("disabled", "==", false)
-        .orderBy(sortField, "desc")
-        .limit(100)
-        .get();
-      docs = snap.docs;
-    } catch (err: any) {
-      // Fallback if index is building or missing: fetch all active users & sort in memory
-      if (err?.code === 9 || String(err).includes("FAILED_PRECONDITION")) {
-        const snap = await adminDb().collection("users").limit(500).get();
-        docs = snap.docs.filter((d) => d.data().disabled !== true);
-        docs.sort((a, b) => (b.data()[sortField] ?? 0) - (a.data()[sortField] ?? 0));
-        docs = docs.slice(0, 100);
-      } else {
-        throw err;
-      }
-    }
+    let orderByColumn: any = users.coins;
+    if (period === "weekly") orderByColumn = users.weeklyCoins;
+    if (period === "monthly") orderByColumn = users.monthlyCoins;
 
-    const entries = docs.map((d) => {
-      const data = d.data();
+    const rows = await db.query.users.findMany({
+      where: eq(users.disabled, false),
+      orderBy: [desc(orderByColumn), desc(users.xp), desc(users.coins), desc(users.createdAt)],
+      limit: 100,
+    });
+
+
+
+    const entries = rows.map((u) => {
+      let badges: string[] = [];
+      try {
+        badges = JSON.parse(u.badges ?? "[]");
+      } catch {}
       return {
-        uid: d.id,
-        displayName: data.displayName ?? "Member",
-        photoURL: data.photoURL ?? null,
-        department: data.department ?? null,
-        year: data.year ?? null,
-        coins: data.coins ?? 0,
-        weeklyCoins: data.weeklyCoins ?? 0,
-        monthlyCoins: data.monthlyCoins ?? 0,
-        xp: data.xp ?? 0,
-        level: data.level ?? 1,
-        badges: data.badges ?? [],
+        uid: u.uid,
+        displayName: u.displayName ?? "Member",
+        photoURL: u.photoURL ?? null,
+        department: u.department ?? null,
+        year: u.year ?? null,
+        coins: u.coins ?? 0,
+        weeklyCoins: u.weeklyCoins ?? 0,
+        monthlyCoins: u.monthlyCoins ?? 0,
+        xp: u.xp ?? 0,
+        level: u.level ?? 1,
+        badges,
       };
     });
 
     return jsonOk({ entries });
   });
 }
+

@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
-import { adminDb, FieldValue } from "@/lib/firebase/admin";
+import { asc, eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { quizzes, quizQuestions, quizAnswerKeys, liveQuizSessions, liveQuizParticipants, liveQuizResponses } from "@/lib/db/schema";
 import {
   ApiError,
   assertSameOrigin,
@@ -9,12 +11,11 @@ import {
   requireAdmin,
 } from "@/lib/server/api";
 import { audit } from "@/lib/server/audit";
-import { buildQuizDocs } from "@/lib/server/quiz";
 import { quizUpsertSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
 
-/** GET — full quiz incl. questions + answer key for the editor (admin only). */
+/** GET — full quiz incl. questions + answer key for the editor from Cloudflare D1. */
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ quizId: string }> }
@@ -22,33 +23,82 @@ export async function GET(
   return handleApi(async () => {
     await requireAdmin();
     const { quizId } = await params;
-    const db = adminDb();
 
-    const quizSnap = await db.collection("quizzes").doc(quizId).get();
-    if (!quizSnap.exists) throw new ApiError(404, "Quiz not found.");
+    const quizRow = await db.query.quizzes.findFirst({
+      where: eq(quizzes.id, quizId),
+    });
+    if (!quizRow) throw new ApiError(404, "Quiz not found.");
 
-    const [questionsSnap, keySnap] = await Promise.all([
-      db.collection("quizzes").doc(quizId).collection("questions").orderBy("order").get(),
-      db.collection("quizzes").doc(quizId).collection("answerKey").doc("main").get(),
+    const [qRows, keyRows] = await Promise.all([
+      db.query.quizQuestions.findMany({
+        where: eq(quizQuestions.quizId, quizId),
+        orderBy: [asc(quizQuestions.orderIndex)],
+      }),
+      db.query.quizAnswerKeys.findMany({
+        where: eq(quizAnswerKeys.quizId, quizId),
+      }),
     ]);
 
-    const answers = (keySnap.data()?.answers ?? {}) as Record<
-      string,
-      { correct: number[]; explanation: string | null }
-    >;
+    const answersMap: Record<string, { correct: number[]; explanation: string | null }> = {};
+    for (const k of keyRows) {
+      try {
+        answersMap[k.questionId] = {
+          correct: JSON.parse(k.correctIndices ?? "[]"),
+          explanation: k.explanation,
+        };
+      } catch {}
+    }
 
-    const questions = questionsSnap.docs.map((d) => ({
-      id: d.id,
-      ...d.data(),
-      correctIndices: answers[d.id]?.correct ?? [],
-      explanation: answers[d.id]?.explanation ?? null,
-    }));
+    const questions = qRows.map((q) => {
+      let options: string[] = [];
+      try {
+        options = JSON.parse(q.options ?? "[]");
+      } catch {}
+      return {
+        id: q.id,
+        type: q.type,
+        prompt: q.prompt,
+        imageUrl: q.imageUrl,
+        options,
+        points: q.points,
+        order: q.orderIndex,
+        correctIndices: answersMap[q.id]?.correct ?? [],
+        explanation: answersMap[q.id]?.explanation ?? null,
+      };
+    });
 
-    return jsonOk({ quiz: { id: quizSnap.id, ...quizSnap.data() }, questions });
+    let settings: any = {};
+    try {
+      settings = JSON.parse(quizRow.settings ?? "{}");
+    } catch {}
+
+    const quiz = {
+      id: quizRow.id,
+      title: quizRow.title,
+      description: quizRow.description,
+      coverImage: quizRow.coverImage,
+      status: quizRow.status,
+      mode: quizRow.mode,
+      startAt: quizRow.startAt ? new Date(quizRow.startAt) : null,
+      endAt: quizRow.endAt ? new Date(quizRow.endAt) : null,
+      durationSeconds: quizRow.durationSeconds,
+      questionCount: quizRow.questionCount,
+      totalPoints: quizRow.totalPoints,
+      coinsPerPoint: quizRow.coinsPerPoint,
+      xpReward: quizRow.xpReward,
+      settings,
+      createdBy: quizRow.createdBy,
+      hostUid: quizRow.hostUid,
+      hostDisplayName: quizRow.hostDisplayName,
+      createdAt: quizRow.createdAt ? new Date(quizRow.createdAt) : new Date(),
+      updatedAt: quizRow.updatedAt ? new Date(quizRow.updatedAt) : new Date(),
+    };
+
+    return jsonOk({ quiz, questions });
   });
 }
 
-/** PUT — replace quiz metadata, questions, and answer key. */
+/** PUT — replace quiz metadata, questions, and answer key in Cloudflare D1. */
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ quizId: string }> }
@@ -59,25 +109,63 @@ export async function PUT(
     const { quizId } = await params;
     const input = await parseBody(req, quizUpsertSchema);
 
-    const db = adminDb();
-    const quizRef = db.collection("quizzes").doc(quizId);
-    const quizSnap = await quizRef.get();
-    if (!quizSnap.exists) throw new ApiError(404, "Quiz not found.");
+    const quizRow = await db.query.quizzes.findFirst({
+      where: eq(quizzes.id, quizId),
+    });
+    if (!quizRow) throw new ApiError(404, "Quiz not found.");
 
-    const existingQuestions = await quizRef.collection("questions").get();
+    const now = Date.now();
+    const totalPoints = input.questions.reduce((s: number, q: any) => s + (q.points ?? 0), 0);
 
-    const { quizDoc, questions } = buildQuizDocs(input);
-    const batch = db.batch();
-    existingQuestions.docs.forEach((d) => batch.delete(d.ref));
-    batch.update(quizRef, quizDoc);
+    // Update quiz metadata
+    await db
+      .update(quizzes)
+      .set({
+        title: input.title,
+        description: input.description ?? "",
+        coverImage: input.coverImage ?? null,
+        mode: input.mode ?? "async",
+        status: input.status,
+        startAt: input.startAt,
+        endAt: input.endAt,
+        durationSeconds: input.durationSeconds,
+        questionCount: input.questions.length,
+        totalPoints,
+        coinsPerPoint: input.coinsPerPoint,
+        xpReward: input.xpReward ?? (totalPoints * 10 || 100),
+        settings: JSON.stringify(input.settings ?? {}),
+        updatedAt: now,
+      })
+      .where(eq(quizzes.id, quizId));
 
-    const answers: Record<string, unknown> = {};
-    for (const q of questions) {
-      batch.set(quizRef.collection("questions").doc(q.id), q.publicDoc);
-      answers[q.id] = q.keyEntry;
+    // Delete existing questions & answer keys
+    await db.delete(quizQuestions).where(eq(quizQuestions.quizId, quizId));
+    await db.delete(quizAnswerKeys).where(eq(quizAnswerKeys.quizId, quizId));
+
+    // Re-insert questions and keys
+    for (let i = 0; i < input.questions.length; i++) {
+      const q = input.questions[i]!;
+      const qId = q.id ?? `q_${i + 1}`;
+
+      await db.insert(quizQuestions).values({
+        id: qId,
+        quizId,
+        type: q.type,
+        prompt: q.prompt,
+        imageUrl: q.imageUrl ?? null,
+        options: JSON.stringify(q.options),
+        points: q.points,
+        orderIndex: i,
+        createdAt: now,
+      });
+
+      await db.insert(quizAnswerKeys).values({
+        quizId,
+        questionId: qId,
+        correctIndices: JSON.stringify(q.correctIndices),
+        explanation: q.explanation ?? null,
+      });
     }
-    batch.set(quizRef.collection("answerKey").doc("main"), { answers });
-    await batch.commit();
 
     await audit({
       actorUid: admin.uid,
@@ -91,7 +179,7 @@ export async function PUT(
   });
 }
 
-/** DELETE — remove quiz, questions, and answer key. Attempts are kept. */
+/** DELETE — remove quiz, questions, and live sessions from Cloudflare D1. */
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ quizId: string }> }
@@ -101,32 +189,27 @@ export async function DELETE(
     const admin = await requireAdmin();
     const { quizId } = await params;
 
-    const db = adminDb();
-    const quizRef = db.collection("quizzes").doc(quizId);
-    const quizSnap = await quizRef.get();
-    if (!quizSnap.exists) throw new ApiError(404, "Quiz not found.");
+    const quizRow = await db.query.quizzes.findFirst({
+      where: eq(quizzes.id, quizId),
+    });
+    if (!quizRow) throw new ApiError(404, "Quiz not found.");
 
-    const [questions, keys, counters] = await Promise.all([
-      quizRef.collection("questions").get(),
-      quizRef.collection("answerKey").get(),
-      quizRef.collection("attemptCounters").get(),
-    ]);
-
-    const batch = db.batch();
-    questions.docs.forEach((d) => batch.delete(d.ref));
-    keys.docs.forEach((d) => batch.delete(d.ref));
-    counters.docs.forEach((d) => batch.delete(d.ref));
-    batch.delete(quizRef);
-    await batch.commit();
+    await db.delete(quizAnswerKeys).where(eq(quizAnswerKeys.quizId, quizId));
+    await db.delete(quizQuestions).where(eq(quizQuestions.quizId, quizId));
+    await db.delete(liveQuizResponses).where(eq(liveQuizResponses.quizId, quizId));
+    await db.delete(liveQuizParticipants).where(eq(liveQuizParticipants.quizId, quizId));
+    await db.delete(liveQuizSessions).where(eq(liveQuizSessions.quizId, quizId));
+    await db.delete(quizzes).where(eq(quizzes.id, quizId));
 
     await audit({
       actorUid: admin.uid,
       actorEmail: admin.email,
       action: "quiz.delete",
       target: quizId,
-      details: { title: quizSnap.data()?.title },
+      details: { title: quizRow.title },
     });
 
     return jsonOk({ deleted: true });
   });
 }
+

@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
-import { adminDb, FieldValue } from "@/lib/firebase/admin";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { certProgram, certProgress } from "@/lib/db/schema";
 import {
   ApiError,
   assertSameOrigin,
@@ -11,23 +13,12 @@ import {
 import { awardCoins } from "@/lib/server/coins";
 import { audit } from "@/lib/server/audit";
 import { certVerifySchema } from "@/lib/validation";
-import type { CertDay } from "@/types";
 
 export const runtime = "nodejs";
 
-interface DayEntry {
-  status: string;
-  coinGranted?: boolean;
-  [k: string]: unknown;
-}
-
 /**
  * POST /api/admin/certifications/verify
- *
- * Bulk-verify certification completion for up to 200 students at once.
- * Coins for a given (student, day) pair are granted AT MOST ONCE, ever:
- * a permanent `coinGranted` flag survives status flips, so toggling
- * completed → pending → completed cannot farm duplicate rewards.
+ * Bulk-verify certification completion for students in Cloudflare D1.
  */
 export async function POST(req: NextRequest) {
   return handleApi(async () => {
@@ -35,68 +26,58 @@ export async function POST(req: NextRequest) {
     const admin = await requireAdmin();
     const body = await parseBody(req, certVerifySchema);
 
-    const db = adminDb();
-    const daySnap = await db.collection("certProgram").doc(body.dayId).get();
-    if (!daySnap.exists) throw new ApiError(404, "Certification day not found.");
-    const day = daySnap.data() as CertDay;
+    const day = await db.query.certProgram.findFirst({
+      where: eq(certProgram.dayId, body.dayId),
+    });
+    if (!day) throw new ApiError(404, "Certification day not found.");
 
     const results: Array<{ uid: string; ok: boolean; error?: string }> = [];
+    const now = Date.now();
 
     for (const uid of body.uids) {
       try {
-        const progressRef = db.collection("certProgress").doc(uid);
-
-        const { shouldAward } = await db.runTransaction(async (tx) => {
-          const snap = await tx.get(progressRef);
-          const days =
-            (snap.data()?.days as Record<string, DayEntry> | undefined) ?? {};
-          const entry = days[body.dayId] ?? { status: "pending" };
-
-          if (body.status === "completed" && entry.status === "completed") {
-            return { shouldAward: false };
-          }
-
-          const award =
-            body.status === "completed" && entry.coinGranted !== true;
-
-          const completedDelta =
-            body.status === "completed" && entry.status !== "completed"
-              ? 1
-              : body.status === "pending" && entry.status === "completed"
-                ? -1
-                : 0;
-
-          const prevCount = (snap.data()?.completedCount as number) ?? 0;
-
-          tx.set(
-            progressRef,
-            {
-              uid,
-              days: {
-                ...days,
-                [body.dayId]: {
-                  ...entry,
-                  status: body.status,
-                  verifiedBy: admin.uid,
-                  verifiedAt: new Date(),
-                  coinGranted: entry.coinGranted === true || award,
-                },
-              },
-              completedCount: Math.max(0, prevCount + completedDelta),
-              updatedAt: FieldValue.serverTimestamp(),
-            },
-            { merge: true }
-          );
-
-          return { shouldAward: award };
+        const existingProgress = await db.query.certProgress.findFirst({
+          where: and(
+            eq(certProgress.uid, uid),
+            eq(certProgress.dayId, body.dayId)
+          ),
         });
 
-        if (shouldAward && day.coins > 0) {
+        const isCompleted = body.status === "completed";
+        const wasAlreadyCompleted = Boolean(existingProgress?.completed);
+        const shouldAward = isCompleted && !wasAlreadyCompleted;
+
+        if (existingProgress) {
+          await db
+            .update(certProgress)
+            .set({
+              completed: isCompleted,
+              completedAt: isCompleted ? now : null,
+              verifiedBy: admin.uid,
+            })
+            .where(
+              and(
+                eq(certProgress.uid, uid),
+                eq(certProgress.dayId, body.dayId)
+              )
+            );
+        } else {
+          await db.insert(certProgress).values({
+            uid,
+            dayId: body.dayId,
+            completed: isCompleted,
+            completedAt: isCompleted ? now : null,
+            verifiedBy: admin.uid,
+          });
+        }
+
+        if (shouldAward && (day.coins > 0 || day.xp > 0)) {
           await awardCoins({
             uid,
             amount: day.coins,
+            xpAmount: day.xp,
             source: "certification",
-            reason: `Certification verified: ${day.certName} (Day ${day.day})`,
+            reason: `Certification verified: ${day.title} (Day ${day.dayNumber})`,
             refId: body.dayId,
             awardedBy: admin.uid,
             counters: { certsCompleted: 1 },
@@ -127,3 +108,4 @@ export async function POST(req: NextRequest) {
     return jsonOk({ results });
   });
 }
+

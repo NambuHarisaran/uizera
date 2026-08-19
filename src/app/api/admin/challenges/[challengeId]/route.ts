@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
-import { adminDb, Timestamp } from "@/lib/firebase/admin";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { challenges, challengeSubmissions } from "@/lib/db/schema";
 import {
   ApiError,
   assertSameOrigin,
@@ -23,14 +25,25 @@ export async function PUT(
     const { challengeId } = await params;
     const input = await parseBody(req, challengeUpsertSchema);
 
-    const ref = adminDb().collection("challenges").doc(challengeId);
-    const snap = await ref.get();
-    if (!snap.exists) throw new ApiError(404, "Challenge not found.");
-
-    await ref.update({
-      ...input,
-      deadline: Timestamp.fromMillis(input.deadline),
+    const challenge = await db.query.challenges.findFirst({
+      where: eq(challenges.id, challengeId),
     });
+    if (!challenge) throw new ApiError(404, "Challenge not found.");
+
+    await db
+      .update(challenges)
+      .set({
+        title: input.title,
+        week: input.week,
+        description: input.description,
+        instructions: input.instructions,
+        resources: JSON.stringify(input.resources ?? []),
+        coins: input.coins,
+        xp: input.xp ?? 50,
+        status: input.status,
+        deadline: input.deadline,
+      })
+      .where(eq(challenges.id, challengeId));
 
     await audit({
       actorUid: admin.uid,
@@ -53,20 +66,23 @@ export async function DELETE(
     const admin = await requireAdmin();
     const { challengeId } = await params;
 
-    const ref = adminDb().collection("challenges").doc(challengeId);
-    const snap = await ref.get();
-    if (!snap.exists) throw new ApiError(404, "Challenge not found.");
+    const challenge = await db.query.challenges.findFirst({
+      where: eq(challenges.id, challengeId),
+    });
+    if (!challenge) throw new ApiError(404, "Challenge not found.");
 
-    await ref.delete();
+    await db.delete(challengeSubmissions).where(eq(challengeSubmissions.challengeId, challengeId));
+    await db.delete(challenges).where(eq(challenges.id, challengeId));
 
     await audit({
       actorUid: admin.uid,
       actorEmail: admin.email,
       action: "challenge.delete",
       target: challengeId,
-      details: { title: snap.data()?.title },
+      details: { title: challenge.title },
     });
 
     return jsonOk({ deleted: true });
   });
 }
+

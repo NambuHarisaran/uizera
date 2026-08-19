@@ -12,7 +12,7 @@ import { DEPARTMENTS, YEARS } from "@/lib/constants";
 export const questionSchema = z
   .object({
     id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).optional(),
-    type: z.enum(["mcq", "true_false", "multi_select", "image"]),
+    type: z.enum(["mcq", "single", "true_false", "multi_select", "image"]).transform((t) => (t === "single" ? "mcq" : t)),
     prompt: z.string().min(1).max(1000),
     imageUrl: z.string().url().max(1024).nullable().optional(),
     options: z.array(z.string().min(1).max(300)).min(2).max(8),
@@ -20,6 +20,7 @@ export const questionSchema = z
     explanation: z.string().max(2000).nullable().optional(),
     points: z.number().int().min(1).max(100),
   })
+
   .superRefine((q, ctx) => {
     if (q.correctIndices.some((i) => i >= q.options.length)) {
       ctx.addIssue({
@@ -181,8 +182,9 @@ export const certDayUpsertSchema = z.object({
 // ── Admin: users & coins ────────────────────────────────────────────────────
 
 export const roleUpdateSchema = z.object({
-  role: z.enum(["admin", "student"]),
+  role: z.enum(["admin", "quiz_host", "student"]),
 });
+
 
 export const userStatusSchema = z.object({
   disabled: z.boolean(),

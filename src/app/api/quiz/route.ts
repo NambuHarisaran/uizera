@@ -1,36 +1,60 @@
 import { NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase/admin";
+import { and, desc, inArray, ne } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { quizzes } from "@/lib/db/schema";
 import { handleApi } from "@/lib/server/api";
 
 export const runtime = "nodejs";
 
 /**
  * GET /api/quiz — list published quizzes (scheduled | live | closed).
- * Public to signed-in users.
- *
- * Live-session (instructor-led) quizzes never appear here, launched or not —
- * they're only reachable via the Live Stage link/QR the instructor shares,
- * so a premade session's questions can't be browsed ahead of time.
- *
- * Cache: 30s CDN + 10s SWR so a newly published quiz appears within ~40s
- * while keeping Firestore read costs low on the free tier.
+ * Queries Cloudflare D1 with edge caching.
  */
 export async function GET() {
   return handleApi(async () => {
-    const snap = await adminDb()
-      .collection("quizzes")
-      .where("status", "in", ["scheduled", "live", "closed"])
-      .orderBy("startAt", "desc")
-      .limit(100)
-      .get();
+    const rows = await db.query.quizzes.findMany({
+      where: and(
+        inArray(quizzes.status, ["scheduled", "live", "closed"]),
+        ne(quizzes.mode, "live")
+      ),
+      orderBy: [desc(quizzes.startAt)],
+      limit: 100,
+    });
 
-    const quizzes = snap.docs
-      .map((d) => ({ id: d.id, ...d.data() }))
-      .filter((q: any) => q.mode !== "live");
+    const formatted = rows.map((q) => {
+      let settings: any = {};
+      try {
+        settings = JSON.parse(q.settings ?? "{}");
+      } catch {
+        settings = {};
+      }
+      return {
+        id: q.id,
+        title: q.title,
+        description: q.description ?? "",
+        coverImage: q.coverImage ?? undefined,
+        status: q.status,
+        mode: q.mode,
+        startAt: q.startAt ? new Date(q.startAt) : null,
+        endAt: q.endAt ? new Date(q.endAt) : null,
+        durationSeconds: q.durationSeconds,
+        questionCount: q.questionCount,
+        totalPoints: q.totalPoints,
+        coinsPerPoint: q.coinsPerPoint,
+        xpReward: q.xpReward,
+        settings,
+        createdBy: q.createdBy,
+        hostUid: q.hostUid ?? undefined,
+        hostDisplayName: q.hostDisplayName ?? undefined,
+        createdAt: q.createdAt ? new Date(q.createdAt) : new Date(),
+        updatedAt: q.updatedAt ? new Date(q.updatedAt) : new Date(),
+      };
+    });
 
     return NextResponse.json(
-      { ok: true, data: { quizzes } },
-      { headers: { "Cache-Control": "s-maxage=30, stale-while-revalidate=10" } }
+      { ok: true, data: { quizzes: formatted } },
+      { headers: { "Cache-Control": "s-maxage=10, stale-while-revalidate=5" } }
     );
   });
 }
+

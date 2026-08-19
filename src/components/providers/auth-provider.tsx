@@ -16,16 +16,17 @@ import {
   signOut as firebaseSignOut,
   type User as FirebaseUser,
 } from "firebase/auth";
-import { doc, onSnapshot } from "firebase/firestore";
-import { clientAuth, clientDb, googleProvider } from "@/lib/firebase/client";
+import { clientAuth, googleProvider } from "@/lib/firebase/client";
 import type { AppUser } from "@/types";
 
 interface AuthContextValue {
   firebaseUser: FirebaseUser | null;
-  /** Firestore profile (coins, role, badges). Null until loaded / signed out. */
+  /** Cloudflare D1 profile (coins, role, badges). Null until loaded / signed out. */
   user: AppUser | null;
   loading: boolean;
   isAdmin: boolean;
+  /** True for quiz_host, admin, and super_admin — can access the /host portal. */
+  isHost: boolean;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -33,9 +34,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 /**
- * Minimal profile derived from the Firebase auth user. Used when the
- * Firestore user document is not yet created (first-login race) or cannot
- * be read, so a signed-in user is never presented as logged-out.
+ * Minimal profile derived from the Firebase auth user.
  */
 function fallbackProfile(fb: FirebaseUser): AppUser {
   return {
@@ -69,92 +68,96 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const syncSessionWithD1 = useCallback(async (fbUser: FirebaseUser): Promise<AppUser | null> => {
+    try {
+      const idToken = await fbUser.getIdToken();
+      const res = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      });
+      const body = (await res.json().catch(() => null)) as
+        | { ok: boolean; data?: { user?: AppUser } }
+        | null;
+      if (body?.ok && body.data?.user) {
+        return body.data.user;
+      }
+    } catch (err) {
+      console.error("Session sync error:", err);
+    }
+    return null;
+  }, []);
+
+  const hydrateProfile = useCallback(async (fbUser: FirebaseUser) => {
+    try {
+      // 1. Try reading the existing session profile from D1
+      const res = await fetch("/api/profile");
+      const body = (await res.json().catch(() => null)) as
+        | { ok: boolean; data?: { user?: AppUser } }
+        | null;
+      if (body?.ok && body.data?.user) {
+        setUser(body.data.user);
+        setLoading(false);
+        return;
+      }
+    } catch {
+      // Profile fetch failed, will try token exchange
+    }
+
+    // 2. If session cookie missing or expired, sync fresh token to D1
+    const syncedUser = await syncSessionWithD1(fbUser);
+    if (syncedUser) {
+      setUser(syncedUser);
+    } else {
+      setUser(fallbackProfile(fbUser));
+    }
+    setLoading(false);
+  }, [syncSessionWithD1]);
+
   useEffect(() => {
     return onAuthStateChanged(clientAuth(), (fbUser) => {
       setFirebaseUser(fbUser);
       if (!fbUser) {
         setUser(null);
         setLoading(false);
+      } else {
+        void hydrateProfile(fbUser);
       }
     });
-  }, []);
-
-  useEffect(() => {
-    if (!firebaseUser) return;
-    let cancelled = false;
-
-    // Authoritative fallback: the server reads the profile with the Admin SDK
-    // (correct role included) when the client SDK cannot read the users doc.
-    const hydrateFromServer = async () => {
-      try {
-        const res = await fetch("/api/profile");
-        const body = (await res.json().catch(() => null)) as
-          | { ok: boolean; data?: { user?: AppUser } }
-          | null;
-        if (!cancelled && body?.ok && body.data?.user) {
-          setUser(body.data.user);
-          setLoading(false);
-          return;
-        }
-      } catch {
-        // fall through to the minimal client-side profile
-      }
-      if (!cancelled) {
-        setUser(fallbackProfile(firebaseUser));
-        setLoading(false);
-      }
-    };
-
-    const ref = doc(clientDb(), "users", firebaseUser.uid);
-    const unsub = onSnapshot(
-      ref,
-      (snap) => {
-        if (snap.exists()) {
-          setUser({ ...(snap.data() as AppUser), uid: snap.id });
-          setLoading(false);
-        } else {
-          void hydrateFromServer();
-        }
-      },
-      () => void hydrateFromServer()
-    );
-    return () => {
-      cancelled = true;
-      unsub();
-    };
-  }, [firebaseUser]);
+  }, [hydrateProfile]);
 
   const signInWithGoogle = useCallback(async () => {
-    const cred = await signInWithPopup(clientAuth(), googleProvider());
-    // Show user as signed in immediately with data from Google popup
-    setUser(fallbackProfile(cred.user));
-    setLoading(false);
-    // Exchange token for session cookie in the background
-    cred.user.getIdToken(true).then(async (idToken) => {
-      try {
-        const res = await fetch("/api/auth/session", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ idToken }),
-        });
-        if (!res.ok) {
-          const body = (await res.json().catch(() => null)) as { error?: string } | null;
-          console.error("Session exchange failed:", body?.error);
-        }
-        router.refresh();
-      } catch (err) {
-        console.error("Session exchange error:", err);
+    try {
+      setLoading(true);
+      const cred = await signInWithPopup(clientAuth(), googleProvider());
+      setFirebaseUser(cred.user);
+
+      // Exchange ID token for session cookie & get D1 profile directly
+      const syncedUser = await syncSessionWithD1(cred.user);
+      if (syncedUser) {
+        setUser(syncedUser);
+      } else {
+        setUser(fallbackProfile(cred.user));
       }
-    });
-  }, [router]);
+      setLoading(false);
+      router.refresh();
+    } catch (err) {
+      console.error("Google sign-in error:", err);
+      setLoading(false);
+    }
+  }, [router, syncSessionWithD1]);
 
   const signOut = useCallback(async () => {
+    setLoading(true);
     await fetch("/api/auth/session", { method: "DELETE" }).catch(() => {});
     await firebaseSignOut(clientAuth()).catch(() => {});
     setUser(null);
+    setFirebaseUser(null);
+    setLoading(false);
     router.push("/");
     router.refresh();
   }, [router]);
+
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -162,6 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       loading,
       isAdmin: user?.role === "admin" || user?.role === "super_admin",
+      isHost: user?.role === "quiz_host" || user?.role === "admin" || user?.role === "super_admin",
       signInWithGoogle,
       signOut,
     }),

@@ -2,9 +2,8 @@
 
 import { use, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { doc, collection, onSnapshot, query, orderBy, limit } from "firebase/firestore";
-import { clientDb } from "@/lib/firebase/client";
 import Image from "next/image";
+
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
@@ -102,91 +101,17 @@ export default function AdminLiveQuizStagePage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quizId]);
 
-  // Subscribe to live session document in Firestore
+  // Real-time polling against Cloudflare D1 (750ms)
   useEffect(() => {
     if (!user) return;
-    const unsub = onSnapshot(
-      doc(clientDb(), "liveQuizSessions", quizId),
-      (snapshot) => {
-        if (snapshot.exists()) {
-          const s = snapshot.data() as LiveQuizSession;
-          setSession(s);
-        }
-      },
-      (err) => {
-        console.warn("Live session snapshot warning:", err?.message || err);
-      }
-    );
-    return () => unsub();
+    const interval = setInterval(() => {
+      void loadData();
+    }, 750);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quizId, user]);
 
-  // Subscribe to participants in lobby real-time
-  useEffect(() => {
-    if (!user) return;
-    const participantsCol = collection(clientDb(), "liveQuizSessions", quizId, "participants");
-    const unsub = onSnapshot(
-      participantsCol,
-      (snap) => {
-        const list = snap.docs
-          .map((d) => ({ uid: d.id, ...d.data() } as LiveParticipant))
-          .filter((p) => !p.kicked);
-        setParticipants(list);
-      },
-      (err) => {
-        console.warn("Participants snapshot warning:", err?.message || err);
-      }
-    );
-    return () => unsub();
-  }, [quizId, user]);
 
-  // Subscribe to responses / live answers
-  useEffect(() => {
-    if (!user) return;
-    const responsesCol = collection(clientDb(), "liveQuizSessions", quizId, "responses");
-    const unsub = onSnapshot(
-      responsesCol,
-      (snap) => {
-        const docs = snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
-        // Sort for leaderboard
-        const sorted = [...docs]
-          .map((r: any) => ({
-            uid: r.uid || r.id,
-            displayName: r.displayName || "Participant",
-            score: r.totalScore || 0,
-            totalCoins: r.totalScore || 0,
-            answers: r.answers || {},
-          }))
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 20);
-
-        setLeaderboard(sorted);
-
-        // Compute answered count for active question
-        const currentQ = questions[session?.currentQuestionIndex ?? 0];
-        if (currentQ) {
-          const count = docs.filter((d: any) => d.answers?.[currentQ.id]).length;
-          setAnsweredCount(count);
-
-          const counts = new Array(currentQ.options?.length || 4).fill(0);
-          for (const d of docs as any[]) {
-            const ans = d.answers?.[currentQ.id];
-            if (ans?.selected) {
-              for (const idx of ans.selected) {
-                if (typeof idx === "number" && counts[idx] !== undefined) {
-                  counts[idx] += 1;
-                }
-              }
-            }
-          }
-          setOptionCounts(counts);
-        }
-      },
-      (err) => {
-        console.warn("Responses snapshot warning:", err?.message || err);
-      }
-    );
-    return () => unsub();
-  }, [quizId, user, session?.currentQuestionIndex, questions]);
 
   const handleControl = async (
     action: "start" | "setQuestion" | "toggleAnswer" | "showLeaderboard" | "hideLeaderboard" | "kickParticipant" | "end" | "relaunch",
@@ -319,26 +244,24 @@ export default function AdminLiveQuizStagePage({
       className={
         isFullscreen
           ? "flex h-screen w-screen flex-col overflow-y-auto bg-background p-6 sm:p-10 select-none"
-          : "container max-w-5xl py-8 space-y-8"
+          : "max-w-6xl mx-auto py-2 space-y-6"
       }
     >
       {/* ── Top Header / Stage Status Bar ────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-5">
+
         <div>
           {!isFullscreen && (
-            <>
-              <Image src="/uizera-logo.png" alt="UiZera" width={100} height={34} className="h-8 w-auto object-contain mb-3" />
-              <Button variant="ghost" size="sm" onClick={() => router.push("/admin/quizzes")} className="gap-2 mb-2">
-                <ArrowLeft className="h-4 w-4" /> Admin Quizzes
-              </Button>
-            </>
+            <Button variant="ghost" size="sm" onClick={() => router.push("/admin/live-quiz")} className="gap-1.5 mb-2 -ml-2 text-muted-foreground hover:text-foreground">
+              <ArrowLeft className="h-4 w-4" /> Back to Live Sessions
+            </Button>
           )}
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             <h1 className="font-display text-2xl sm:text-3xl font-extrabold">{quizData?.title || "Live Stage Quiz"}</h1>
-            <Badge className="bg-uipath-orange text-white uppercase text-xs animate-pulse">
+            <Badge className="bg-uipath-orange text-white uppercase text-[11px] font-bold tracking-wide animate-pulse">
               Live Stage
             </Badge>
-            <Badge variant="outline" className="gap-1.5 bg-background">
+            <Badge variant="outline" className="gap-1.5 bg-background font-medium">
               <Users className="h-3.5 w-3.5 text-brand-500" /> {participants.length} Joined
             </Badge>
           </div>
@@ -350,14 +273,14 @@ export default function AdminLiveQuizStagePage({
             <Button
               onClick={() => handleControl("start")}
               disabled={actionLoading}
-              className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+              className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md"
             >
               <Play className="h-4 w-4" /> Start Stage Quiz
             </Button>
           )}
 
           {!isFullscreen && (
-            <Button onClick={enterPresenterMode} variant="outline" className="gap-2 font-bold">
+            <Button onClick={enterPresenterMode} variant="outline" className="gap-2 font-bold shadow-sm">
               <Maximize2 className="h-4 w-4" /> Present Fullscreen
             </Button>
           )}
@@ -374,7 +297,7 @@ export default function AdminLiveQuizStagePage({
               disabled={actionLoading}
               variant="destructive"
               size={isFullscreen ? "sm" : "default"}
-              className="gap-2 font-bold"
+              className="gap-2 font-bold shadow-md"
             >
               <StopCircle className="h-4 w-4" /> End Quiz
             </Button>
@@ -384,7 +307,7 @@ export default function AdminLiveQuizStagePage({
             <Button
               onClick={() => handleControl("relaunch")}
               disabled={actionLoading}
-              className="gap-2 bg-brand-500 hover:bg-brand-600 text-white font-bold"
+              className="gap-2 bg-brand-500 hover:bg-brand-600 text-white font-bold shadow-md"
             >
               <RotateCcw className="h-4 w-4" /> Relaunch Session
             </Button>
@@ -392,37 +315,39 @@ export default function AdminLiveQuizStagePage({
         </div>
       </div>
 
-      {/* ── 1. WAITING / LOBBY SCREEN (Clean, huge QR, Participant Wall, Kickable) ── */}
+      {/* ── 1. WAITING / LOBBY SCREEN (Clean, balanced QR, Participant Wall, Kickable) ── */}
       {isWaiting && (
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          className="space-y-8"
+          className="space-y-6"
         >
-          <div className="grid gap-8 lg:grid-cols-12 items-center">
-            {/* Left: Giant QR Code + Join Instructions */}
-            <Card className="lg:col-span-6 border-2 border-brand-500/30 p-8 text-center bg-card shadow-xl space-y-6">
-              <div className="inline-flex items-center gap-2 rounded-full border border-brand-500/30 bg-brand-500/10 px-4 py-1.5 text-sm font-bold text-brand-600 dark:text-brand-400">
-                <Radio className="h-4 w-4 animate-pulse text-uipath-orange" /> Stage Lobby Open
-              </div>
-
-              <div>
-                <h2 className="font-display text-2xl sm:text-3xl font-extrabold">Scan QR Code to Join</h2>
-                <p className="text-sm text-muted-foreground mt-1 font-medium">
-                  Use your phone camera to scan and join instantly.
-                </p>
-              </div>
-
-              {joinUrl && (
-                <div className="flex justify-center">
-                  <div className="rounded-3xl bg-white p-6 shadow-2xl ring-8 ring-brand-500/10 transition-transform hover:scale-105 duration-300">
-                    <QrCode value={joinUrl} size={260} />
-                  </div>
+          <div className="grid gap-6 lg:grid-cols-12 items-stretch">
+            {/* Left: QR Code + Join Instructions */}
+            <Card className="lg:col-span-5 border-2 border-brand-500/20 p-6 text-center bg-card shadow-lg flex flex-col justify-between space-y-4">
+              <div className="space-y-3">
+                <div className="inline-flex items-center gap-1.5 rounded-full border border-brand-500/30 bg-brand-500/10 px-3.5 py-1 text-xs font-bold text-brand-600 dark:text-brand-400">
+                  <Radio className="h-3.5 w-3.5 animate-pulse text-uipath-orange" /> Stage Lobby Open
                 </div>
-              )}
 
-              <div className="rounded-2xl border bg-muted/30 p-3 text-sm font-mono select-all truncate text-foreground font-bold">
-                {joinUrl}
+                <div>
+                  <h2 className="font-display text-xl sm:text-2xl font-bold">Scan QR to Join</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5 font-medium">
+                    Use your phone camera or browser to join instantly.
+                  </p>
+                </div>
+
+                {joinUrl && (
+                  <div className="flex justify-center py-2">
+                    <div className="rounded-2xl bg-white p-3.5 shadow-md ring-4 ring-brand-500/10 transition-transform hover:scale-105 duration-200">
+                      <QrCode value={joinUrl} size={190} />
+                    </div>
+                  </div>
+                )}
+
+                <div className="rounded-xl border bg-muted/40 px-3 py-2 text-xs font-mono select-all truncate text-foreground font-semibold">
+                  {joinUrl}
+                </div>
               </div>
 
               <div className="pt-2">
@@ -430,15 +355,16 @@ export default function AdminLiveQuizStagePage({
                   size="lg"
                   onClick={() => handleControl("start")}
                   disabled={actionLoading}
-                  className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-lg h-14 rounded-2xl shadow-lg shadow-emerald-600/20"
+                  className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-base h-12 rounded-xl shadow-md shadow-emerald-600/20"
                 >
-                  <Play className="h-6 w-6" /> Start Quiz ({participants.length} Ready)
+                  <Play className="h-5 w-5" /> Start Quiz ({participants.length} Ready)
                 </Button>
               </div>
             </Card>
 
             {/* Right: Live Participants Wall (with Kick capability) */}
-            <Card className="lg:col-span-6 border bg-card/60 backdrop-blur-md p-6 h-full flex flex-col">
+            <Card className="lg:col-span-7 border bg-card/60 backdrop-blur-md p-6 flex flex-col justify-between shadow-sm min-h-[420px]">
+
               <div className="flex items-center justify-between border-b pb-4 mb-4">
                 <div className="flex items-center gap-2">
                   <Users className="h-5 w-5 text-brand-500" />

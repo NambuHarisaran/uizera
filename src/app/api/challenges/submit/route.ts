@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
-import { adminDb, FieldValue } from "@/lib/firebase/admin";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { challenges, challengeSubmissions, users } from "@/lib/db/schema";
 import {
   ApiError,
   assertSameOrigin,
@@ -10,20 +12,12 @@ import {
 } from "@/lib/server/api";
 import { rateLimit } from "@/lib/server/rate-limit";
 import { challengeSubmitSchema } from "@/lib/validation";
-import { toMillis } from "@/lib/utils";
-import type { Challenge, ChallengeSubmission } from "@/types";
 
 export const runtime = "nodejs";
 
 /**
  * POST /api/challenges/submit
- *
- * Creates or updates the caller's single submission for a challenge.
- * - One submission per student per challenge (deterministic doc ID).
- * - Editable until the deadline; every edit resets review status to pending
- *   and appends to an immutable history array.
- * - Submissions store external project/video/code links (GitHub, Drive, Loom, UiPath Cloud)
- *   directly in Firestore, requiring zero Firebase Storage bucket dependencies.
+ * Creates or updates the caller's submission for a challenge in Cloudflare D1.
  */
 export async function POST(req: NextRequest) {
   return handleApi(async () => {
@@ -33,42 +27,55 @@ export async function POST(req: NextRequest) {
 
     const body = await parseBody(req, challengeSubmitSchema);
 
-    const db = adminDb();
-    const challengeRef = db.collection("challenges").doc(body.challengeId);
-    const submissionRef = db
-      .collection("submissions")
-      .doc(`${body.challengeId}_${user.uid}`);
+    const [challenge, existing, userRecord] = await Promise.all([
+      db.query.challenges.findFirst({
+        where: eq(challenges.id, body.challengeId),
+      }),
+      db.query.challengeSubmissions.findFirst({
+        where: and(
+          eq(challengeSubmissions.challengeId, body.challengeId),
+          eq(challengeSubmissions.uid, user.uid)
+        ),
+      }),
+      db.query.users.findFirst({
+        where: eq(users.uid, user.uid),
+      }),
+    ]);
 
-    const profile = await db.collection("users").doc(user.uid).get();
-    const displayName =
-      (profile.data()?.displayName as string | undefined) ?? "Member";
+    if (!challenge) throw new ApiError(404, "Challenge not found.");
 
-    await db.runTransaction(async (tx) => {
-      const challengeSnap = await tx.get(challengeRef);
-      if (!challengeSnap.exists) throw new ApiError(404, "Challenge not found.");
-      const challenge = challengeSnap.data() as Challenge;
+    if (challenge.status !== "open" && challenge.status !== "active") {
+      throw new ApiError(400, "This challenge is not accepting submissions.");
+    }
+    if (Date.now() > challenge.deadline) {
+      throw new ApiError(400, "The deadline for this challenge has passed.");
+    }
 
-      if (challenge.status !== "open") {
-        throw new ApiError(400, "This challenge is not accepting submissions.");
+    const displayName = userRecord?.displayName ?? "Member";
+    const now = Date.now();
+    const submissionId = `${body.challengeId}_${user.uid}`;
+
+    const historyItem = {
+      at: now,
+      action: existing ? "updated" : "submitted",
+      by: user.uid,
+      note: null,
+    };
+
+    if (existing) {
+      if (existing.status === "approved") {
+        throw new ApiError(400, "Approved submissions can no longer be edited.");
       }
-      if (Date.now() > toMillis(challenge.deadline)) {
-        throw new ApiError(400, "The deadline for this challenge has passed.");
-      }
 
-      const existingSnap = await tx.get(submissionRef);
-      const historyItem = {
-        at: new Date(),
-        action: existingSnap.exists ? "updated" : "submitted",
-        by: user.uid,
-        note: null,
-      };
+      let history: any[] = [];
+      try {
+        history = JSON.parse(existing.history ?? "[]");
+      } catch {}
+      history.push(historyItem);
 
-      if (existingSnap.exists) {
-        const existing = existingSnap.data() as ChallengeSubmission;
-        if (existing.status === "approved") {
-          throw new ApiError(400, "Approved submissions can no longer be edited.");
-        }
-        tx.update(submissionRef, {
+      await db
+        .update(challengeSubmissions)
+        .set({
           fileUrl: body.fileUrl ?? null,
           filePath: body.filePath ?? null,
           link: body.link ?? null,
@@ -76,30 +83,32 @@ export async function POST(req: NextRequest) {
           status: "pending",
           feedback: null,
           displayName,
-          updatedAt: FieldValue.serverTimestamp(),
-          history: FieldValue.arrayUnion(historyItem),
-        });
-      } else {
-        tx.set(submissionRef, {
-          challengeId: body.challengeId,
-          challengeTitle: challenge.title,
-          uid: user.uid,
-          displayName,
-          fileUrl: body.fileUrl ?? null,
-          filePath: body.filePath ?? null,
-          link: body.link ?? null,
-          notes: body.notes ?? null,
-          status: "pending",
-          feedback: null,
-          coinsAwarded: 0,
-          reviewedBy: null,
-          submittedAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-          history: [historyItem],
-        });
-      }
-    });
+          updatedAt: now,
+          history: JSON.stringify(history),
+        })
+        .where(eq(challengeSubmissions.id, submissionId));
+    } else {
+      await db.insert(challengeSubmissions).values({
+        id: submissionId,
+        challengeId: body.challengeId,
+        challengeTitle: challenge.title,
+        uid: user.uid,
+        displayName,
+        fileUrl: body.fileUrl ?? null,
+        filePath: body.filePath ?? null,
+        link: body.link ?? null,
+        notes: body.notes ?? null,
+        status: "pending",
+        feedback: null,
+        coinsAwarded: 0,
+        reviewedBy: null,
+        submittedAt: now,
+        updatedAt: now,
+        history: JSON.stringify([historyItem]),
+      });
+    }
 
-    return jsonOk({ id: submissionRef.id, status: "pending" });
+    return jsonOk({ id: submissionId, status: "pending" });
   });
 }
+

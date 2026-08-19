@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
-import { adminDb, FieldValue } from "@/lib/firebase/admin";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { challenges, challengeSubmissions } from "@/lib/db/schema";
 import {
   ApiError,
   assertSameOrigin,
@@ -11,17 +13,12 @@ import {
 import { awardCoins } from "@/lib/server/coins";
 import { audit } from "@/lib/server/audit";
 import { submissionReviewSchema } from "@/lib/validation";
-import type { Challenge, ChallengeSubmission } from "@/types";
 
 export const runtime = "nodejs";
 
 /**
  * POST /api/admin/submissions/[submissionId]/review
- *
- * Approve or reject a pending submission. Approval awards the challenge's
- * coins (or an admin-supplied override) exactly once: the status flip
- * pending→approved happens in a transaction, so double-clicks and parallel
- * reviewers cannot double-award.
+ * Approve or reject a submission in Cloudflare D1 and award coins + XP.
  */
 export async function POST(
   req: NextRequest,
@@ -33,68 +30,74 @@ export async function POST(
     const { submissionId } = await params;
     const body = await parseBody(req, submissionReviewSchema);
 
-    const db = adminDb();
-    const submissionRef = db.collection("submissions").doc(submissionId);
+    const submission = await db.query.challengeSubmissions.findFirst({
+      where: eq(challengeSubmissions.id, submissionId),
+    });
 
-    const outcome = await db.runTransaction(async (tx) => {
-      const snap = await tx.get(submissionRef);
-      if (!snap.exists) throw new ApiError(404, "Submission not found.");
-      const submission = snap.data() as ChallengeSubmission;
+    if (!submission) throw new ApiError(404, "Submission not found.");
+    if (submission.status !== "pending") {
+      throw new ApiError(400, "Only pending submissions can be reviewed.");
+    }
 
-      if (submission.status !== "pending") {
-        throw new ApiError(400, "Only pending submissions can be reviewed.");
-      }
+    const challenge = await db.query.challenges.findFirst({
+      where: eq(challenges.id, submission.challengeId),
+    });
 
-      const challengeSnap = await tx.get(
-        db.collection("challenges").doc(submission.challengeId)
-      );
-      const challenge = challengeSnap.data() as Challenge | undefined;
+    const coins =
+      body.decision === "approved"
+        ? Math.max(0, body.coins ?? challenge?.coins ?? 0)
+        : 0;
 
-      const coins =
-        body.decision === "approved"
-          ? Math.max(0, body.coins ?? challenge?.coins ?? 0)
-          : 0;
+    const xp =
+      body.decision === "approved"
+        ? Math.max(0, challenge?.xp ?? 150)
+        : 0;
 
-      const xp =
-        body.decision === "approved"
-          ? Math.max(0, challenge?.xp ?? 150)
-          : 0;
+    const now = Date.now();
+    let history: any[] = [];
+    try {
+      history = JSON.parse(submission.history ?? "[]");
+    } catch {}
 
-      tx.update(submissionRef, {
+    history.push({
+      at: now,
+      action: body.decision,
+      by: admin.uid,
+      note: body.feedback || null,
+    });
+
+    await db
+      .update(challengeSubmissions)
+      .set({
         status: body.decision,
         feedback: body.feedback || null,
         coinsAwarded: coins,
         reviewedBy: admin.uid,
-        updatedAt: FieldValue.serverTimestamp(),
-        history: FieldValue.arrayUnion({
-          at: new Date(),
-          action: body.decision,
-          by: admin.uid,
-          note: body.feedback || null,
-        }),
-      });
-
-      return { submission, coins, xp };
-    });
+        updatedAt: now,
+        history: JSON.stringify(history),
+      })
+      .where(eq(challengeSubmissions.id, submissionId));
 
     let newBadges: string[] = [];
     if (body.decision === "approved") {
       try {
         const award = await awardCoins({
-          uid: outcome.submission.uid,
-          amount: Math.max(1, outcome.coins),
-          xpAmount: outcome.xp,
+          uid: submission.uid,
+          amount: Math.max(1, coins),
+          xpAmount: xp,
           source: "weekly_task",
-          reason: `Challenge approved: ${outcome.submission.challengeTitle}`,
+          reason: `Challenge approved: ${submission.challengeTitle}`,
           refId: submissionId,
           awardedBy: admin.uid,
           counters: { challengesApproved: 1 },
         });
         newBadges = award.newBadges;
       } catch (err) {
-        // Roll back the approval so a retry can re-run the whole flow.
         console.error("[review] award failed, reverting approval:", err);
-        await submissionRef.update({ status: "pending", reviewedBy: null });
+        await db
+          .update(challengeSubmissions)
+          .set({ status: "pending", reviewedBy: null })
+          .where(eq(challengeSubmissions.id, submissionId));
         throw new ApiError(500, "Could not award coins — review was not saved.");
       }
     }
@@ -105,11 +108,11 @@ export async function POST(
       action: `submission.${body.decision}`,
       target: submissionId,
       details: {
-        studentUid: outcome.submission.uid,
-        coins: outcome.coins,
+        studentUid: submission.uid,
+        coins,
       },
     });
 
-    return jsonOk({ status: body.decision, coins: outcome.coins, newBadges });
+    return jsonOk({ status: body.decision, coins, newBadges });
   });
 }

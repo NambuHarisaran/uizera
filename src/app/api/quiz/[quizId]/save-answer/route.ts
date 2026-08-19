@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
-import { adminDb } from "@/lib/firebase/admin";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { quizAttempts } from "@/lib/db/schema";
 import {
   ApiError,
   assertSameOrigin,
@@ -10,26 +12,12 @@ import {
 } from "@/lib/server/api";
 import { rateLimit } from "@/lib/server/rate-limit";
 import { saveAnswerSchema } from "@/lib/validation";
-import { toMillis } from "@/lib/utils";
-import type { QuizAttempt } from "@/types";
 
 export const runtime = "nodejs";
-export const maxDuration = 5;
 
 /**
  * PATCH /api/quiz/[quizId]/save-answer
- *
- * Persists partial answers mid-attempt without submitting.
- * Called client-side on every selection change (debounced ~800ms).
- *
- * This is a best-effort save — a failed call is silently ignored on the client.
- * The submit route is the authoritative source of truth. This only ensures
- * answers survive a hard refresh or browser crash mid-quiz.
- *
- * Guards:
- *   - Attempt must belong to the caller (encoded in attemptId)
- *   - Attempt must be in_progress
- *   - Deadline must not have passed (using the same grace window as submit)
+ * Persists partial answers mid-attempt in Cloudflare D1 without submitting.
  */
 export async function PATCH(
   req: NextRequest,
@@ -47,29 +35,30 @@ export async function PATCH(
       throw new ApiError(403, "This attempt does not belong to you.");
     }
 
-    const db = adminDb();
-    const attemptRef = db.collection("quizAttempts").doc(body.attemptId);
-    const snap = await attemptRef.get();
+    const attempt = await db.query.quizAttempts.findFirst({
+      where: eq(quizAttempts.id, body.attemptId),
+    });
 
-    if (!snap.exists) throw new ApiError(404, "Attempt not found.");
-    const attempt = snap.data() as QuizAttempt;
+    if (!attempt) throw new ApiError(404, "Attempt not found.");
 
     if (attempt.uid !== user.uid) {
       throw new ApiError(403, "This attempt does not belong to you.");
     }
     if (attempt.status !== "in_progress") {
-      // Already submitted or expired — silently accept so the client
-      // doesn't surface an error on the debounced trailing call.
       return jsonOk({ saved: false, reason: "attempt_not_active" });
     }
 
     const now = Date.now();
-    if (now > toMillis(attempt.deadlineAt) + 15_000) {
+    if (now > attempt.deadlineAt + 15_000) {
       return jsonOk({ saved: false, reason: "deadline_passed" });
     }
 
-    await attemptRef.update({ answers: body.answers });
+    await db
+      .update(quizAttempts)
+      .set({ answers: JSON.stringify(body.answers) })
+      .where(eq(quizAttempts.id, body.attemptId));
 
     return jsonOk({ saved: true });
   });
 }
+

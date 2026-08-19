@@ -7,10 +7,12 @@ import {
   Calendar,
   Clock,
   Coins,
+  Crown,
   Pencil,
   Plus,
   Radio,
   Trash2,
+  UserCheck,
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -75,6 +77,12 @@ export default function AdminQuizzesPage() {
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loadingEditId, setLoadingEditId] = useState<string | null>(null);
+  // Assign Host dialog state
+  const [assignHostOpen, setAssignHostOpen] = useState(false);
+  const [assignHostQuizId, setAssignHostQuizId] = useState<string | null>(null);
+  const [assignHostInput, setAssignHostInput] = useState("");
+  const [assignHostSaving, setAssignHostSaving] = useState(false);
+  const [assignHostCurrentName, setAssignHostCurrentName] = useState<string | null>(null);
 
   // Form state
   const [title, setTitle] = useState("");
@@ -161,6 +169,34 @@ export default function AdminQuizzesPage() {
       toast.error(err instanceof Error ? err.message : "Error loading quiz.");
     } finally {
       setLoadingEditId(null);
+    }
+  };
+
+  const openAssignHost = (quiz: Quiz) => {
+    setAssignHostQuizId(quiz.id);
+    setAssignHostInput(quiz.hostUid ?? "");
+    setAssignHostCurrentName(quiz.hostDisplayName ?? null);
+    setAssignHostOpen(true);
+  };
+
+  const handleAssignHost = async () => {
+    if (!assignHostQuizId) return;
+    setAssignHostSaving(true);
+    try {
+      const res = await fetch(`/api/admin/quiz/${assignHostQuizId}/assign-host`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hostUid: assignHostInput.trim() || null }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok || !body?.ok) throw new Error(body?.error ?? "Failed to assign host.");
+      toast.success(assignHostInput.trim() ? "Host assigned successfully." : "Host removed.");
+      setAssignHostOpen(false);
+      refetch();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to assign host.");
+    } finally {
+      setAssignHostSaving(false);
     }
   };
 
@@ -564,15 +600,27 @@ export default function AdminQuizzesPage() {
 
                         <TableCell className="text-right">
                           {q.mode === "live" && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => router.push(`/admin/live-quiz/${q.id}`)}
-                              className="gap-1 border-uipath-orange/40 text-uipath-orange hover:bg-uipath-orange/10 mr-1"
-                              title="Open Instructor Live Stage Console"
-                            >
-                              <Radio className="h-3.5 w-3.5 animate-pulse" /> Live Stage
-                            </Button>
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => router.push(`/admin/live-quiz/${q.id}`)}
+                                className="gap-1 border-uipath-orange/40 text-uipath-orange hover:bg-uipath-orange/10 mr-1"
+                                title="Open Instructor Live Stage Console"
+                              >
+                                <Radio className="h-3.5 w-3.5 animate-pulse" /> Live Stage
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openAssignHost(q)}
+                                className="gap-1 border-amber-500/40 text-amber-600 hover:bg-amber-500/10 mr-1"
+                                title="Assign Quiz Host"
+                              >
+                                <Crown className="h-3.5 w-3.5" />
+                                {q.hostDisplayName ? q.hostDisplayName.split(" ")[0] : "Host"}
+                              </Button>
+                            </>
                           )}
                           <Button
                             variant="ghost"
@@ -604,6 +652,54 @@ export default function AdminQuizzesPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Assign Host Dialog */}
+      <Dialog open={assignHostOpen} onOpenChange={setAssignHostOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserCheck className="h-5 w-5 text-amber-500" />
+              Assign Quiz Host
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            {assignHostCurrentName && (
+              <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm">
+                <Crown className="h-4 w-4 text-amber-500 shrink-0" />
+                <span>
+                  Currently assigned to <strong>{assignHostCurrentName}</strong>
+                </span>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label htmlFor="host-uid-input">Quiz Host User UID</Label>
+              <Input
+                id="host-uid-input"
+                placeholder="Paste the user UID here..."
+                value={assignHostInput}
+                onChange={(e) => setAssignHostInput(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                The user must already have the <strong>quiz_host</strong> role. Find their UID in the Users section.
+                Leave empty to remove the current host.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" onClick={() => setAssignHostOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleAssignHost}
+                disabled={assignHostSaving}
+                className="gap-2"
+              >
+                {assignHostSaving ? <Spinner className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+                {assignHostInput.trim() ? "Assign Host" : "Remove Host"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

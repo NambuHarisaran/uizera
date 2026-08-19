@@ -1,9 +1,10 @@
 import "server-only";
 
-import { adminDb, FieldValue, Timestamp } from "@/lib/firebase/admin";
+import { asc, eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { quizzes, quizQuestions, quizAnswerKeys } from "@/lib/db/schema";
 import { ApiError } from "@/lib/server/api";
 import { shuffle, toMillis } from "@/lib/utils";
-import type { QuizUpsertInput } from "@/lib/validation";
 import type { Quiz, QuestionType, QuizQuestionPublic, QuizStatus } from "@/types";
 
 /**
@@ -37,63 +38,6 @@ export function gradeQuestion(
   return exact ? points : 0;
 }
 
-/** Split validated quiz input into the public docs + private answer key. */
-export function buildQuizDocs(input: {
-  title: string;
-  description?: string | null;
-  coverImage?: string | null;
-  mode?: "async" | "live";
-  status: QuizStatus;
-  startAt: number;
-  endAt: number;
-  durationSeconds: number;
-  coinsPerPoint: number;
-  xpReward?: number;
-  settings: any;
-  questions: any[];
-}) {
-  const questions = input.questions.map((q: any, i: number) => {
-    const id = q.id ?? `q${String(i + 1).padStart(2, "0")}`;
-    return {
-      id,
-      publicDoc: {
-        type: q.type,
-        prompt: q.prompt,
-        imageUrl: q.imageUrl ?? null,
-        options: q.options,
-        points: q.points,
-        order: i,
-      },
-      keyEntry: {
-        correct: q.correctIndices,
-        explanation: q.explanation ?? null,
-        points: q.points,
-      },
-    };
-  });
-
-  const totalPoints = input.questions.reduce((s: number, q: any) => s + (q.points ?? 0), 0);
-
-  const quizDoc = {
-    title: input.title,
-    description: input.description ?? "",
-    coverImage: input.coverImage ?? null,
-    mode: input.mode ?? "async",
-    status: input.status,
-    startAt: Timestamp.fromMillis(input.startAt),
-    endAt: Timestamp.fromMillis(input.endAt),
-    durationSeconds: input.durationSeconds,
-    questionCount: input.questions.length,
-    totalPoints,
-    coinsPerPoint: input.coinsPerPoint,
-    xpReward: input.xpReward ?? (totalPoints * 10 || 100),
-    settings: input.settings,
-    updatedAt: FieldValue.serverTimestamp(),
-  };
-
-  return { quizDoc, questions };
-}
-
 export interface AnswerKeyEntry {
   correct: number[];
   explanation: string | null;
@@ -101,34 +45,92 @@ export interface AnswerKeyEntry {
 }
 
 export async function getQuizOrThrow(quizId: string): Promise<Quiz> {
-  const snap = await adminDb().collection("quizzes").doc(quizId).get();
-  if (!snap.exists) throw new ApiError(404, "Quiz not found.");
-  return { ...(snap.data() as Quiz), id: snap.id };
+  const row = await db.query.quizzes.findFirst({
+    where: eq(quizzes.id, quizId),
+  });
+  if (!row) throw new ApiError(404, "Quiz not found.");
+
+  let settings: any = {};
+  try {
+    settings = JSON.parse(row.settings ?? "{}");
+  } catch {
+    settings = {};
+  }
+
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description ?? "",
+    coverImage: row.coverImage ?? null,
+    status: row.status as QuizStatus,
+    mode: row.mode as "async" | "live",
+    startAt: row.startAt ? new Date(row.startAt) : null,
+    endAt: row.endAt ? new Date(row.endAt) : null,
+    durationSeconds: row.durationSeconds,
+    questionCount: row.questionCount,
+    totalPoints: row.totalPoints,
+    coinsPerPoint: row.coinsPerPoint,
+    xpReward: row.xpReward ?? 100,
+    settings,
+    createdBy: row.createdBy,
+    hostUid: row.hostUid ?? undefined,
+    hostDisplayName: row.hostDisplayName ?? undefined,
+    createdAt: row.createdAt ? new Date(row.createdAt) : new Date(),
+    updatedAt: row.updatedAt ? new Date(row.updatedAt) : new Date(),
+  };
+
 }
 
 export async function getQuizQuestions(
   quizId: string
 ): Promise<QuizQuestionPublic[]> {
-  const snap = await adminDb()
-    .collection("quizzes")
-    .doc(quizId)
-    .collection("questions")
-    .orderBy("order")
-    .get();
-  return snap.docs.map((d) => ({ ...(d.data() as QuizQuestionPublic), id: d.id }));
+  const rows = await db.query.quizQuestions.findMany({
+    where: eq(quizQuestions.quizId, quizId),
+    orderBy: [asc(quizQuestions.orderIndex)],
+  });
+
+  return rows.map((r) => {
+    let parsedOptions: string[] = [];
+    try {
+      parsedOptions = JSON.parse(r.options ?? "[]");
+    } catch {
+      parsedOptions = [];
+    }
+    return {
+      id: r.id,
+      type: r.type as QuestionType,
+      prompt: r.prompt,
+      imageUrl: r.imageUrl ?? null,
+      options: parsedOptions,
+      points: r.points,
+      order: r.orderIndex,
+    };
+  });
 }
 
 export async function getAnswerKey(
+
   quizId: string
 ): Promise<Record<string, AnswerKeyEntry>> {
-  const snap = await adminDb()
-    .collection("quizzes")
-    .doc(quizId)
-    .collection("answerKey")
-    .doc("main")
-    .get();
-  if (!snap.exists) throw new ApiError(500, "Quiz is misconfigured.");
-  return (snap.data()?.answers ?? {}) as Record<string, AnswerKeyEntry>;
+  const rows = await db.query.quizAnswerKeys.findMany({
+    where: eq(quizAnswerKeys.quizId, quizId),
+  });
+
+  const map: Record<string, AnswerKeyEntry> = {};
+  for (const r of rows) {
+    let parsedCorrect: number[] = [];
+    try {
+      parsedCorrect = JSON.parse(r.correctIndices ?? "[]");
+    } catch {
+      parsedCorrect = [];
+    }
+    map[r.questionId] = {
+      correct: parsedCorrect,
+      explanation: r.explanation ?? null,
+      points: 10,
+    };
+  }
+  return map;
 }
 
 /** A quiz is playable inside its window while scheduled/live. */
@@ -182,3 +184,4 @@ export function generateOrders(
   }
   return { questionOrder, optionOrders };
 }
+

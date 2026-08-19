@@ -1,5 +1,5 @@
 import Link from "next/link";
-import Image from "next/image";
+import { Logo } from "@/components/layout/logo";
 import { Instagram, Linkedin, Mail, MapPin } from "lucide-react";
 import { SITE } from "@/lib/constants";
 
@@ -31,13 +31,11 @@ export function Footer() {
       <div className="container py-14">
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-5">
           <div className="lg:col-span-2">
-            <Link href="/" className="flex items-center gap-2.5 font-display text-lg font-bold">
-              <Image
-                src="/uizera-logo.png"
-                alt="UiZera Logo"
-                width={120}
-                height={40}
-                className="h-9 w-auto object-contain"
+            <Link href="/" className="flex items-center gap-2.5 font-display text-lg font-bold group">
+              <Logo
+                width={140}
+                height={46}
+                imgClassName="h-9 w-auto object-contain transition-transform duration-200 group-hover:scale-105"
               />
             </Link>
             <p className="mt-4 max-w-sm text-sm leading-relaxed text-muted-foreground">

@@ -105,7 +105,7 @@ export function HeroVideoComposition({ dark = false }: HeroVideoProps) {
       style={{
         width: "100%",
         height: "100%",
-        background: theme.bg,
+        backgroundColor: theme.bg,
         backgroundImage: `linear-gradient(to right, ${theme.line} 1px, transparent 1px), linear-gradient(to bottom, ${theme.line} 1px, transparent 1px)`,
         backgroundSize: "36px 36px",
         display: "flex",

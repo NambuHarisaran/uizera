@@ -1,9 +1,8 @@
 "use client";
 
 import { use, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import Image from "next/image";
+import { Logo } from "@/components/layout/logo";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -235,12 +234,11 @@ export default function ParticipantLiveQuizPage({
           transition={{ duration: 0.3 }}
         >
           <Card className="border-2 border-brand-500/30 p-8 text-center space-y-6 shadow-2xl bg-card">
-            <Image
-              src="/uizera-logo.png"
-              alt="UiZera"
-              width={140}
-              height={48}
-              className="mx-auto h-10 w-auto object-contain"
+            <Logo
+              width={160}
+              height={52}
+              className="mx-auto"
+              imgClassName="mx-auto h-11 w-auto object-contain"
             />
 
             <div className="inline-flex items-center gap-2 rounded-full border border-uipath-orange/30 bg-uipath-orange/10 px-4 py-1.5 text-xs font-bold text-uipath-orange">

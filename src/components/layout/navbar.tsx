@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import Image from "next/image";
+import { Logo } from "@/components/layout/logo";
 import { ChevronDown, Coins, Crown, LayoutDashboard, LogOut, Menu, User, X } from "lucide-react";
 import { useAuth } from "@/components/providers/auth-provider";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
@@ -55,14 +55,12 @@ export function Navbar() {
       )}
     >
       <nav className="container flex h-16 items-center justify-between gap-4">
-        <Link href="/" className="flex items-center gap-2.5 font-display text-lg font-bold">
-          <Image
-            src="/uizera-logo.png"
-            alt="UiZera Logo"
-            width={120}
-            height={40}
-            className="h-9 w-auto object-contain"
+        <Link href="/" className="flex items-center gap-2.5 font-display text-lg font-bold group">
+          <Logo
+            width={140}
+            height={46}
             priority
+            imgClassName="h-9 w-auto object-contain transition-transform duration-200 group-hover:scale-105"
           />
         </Link>
 

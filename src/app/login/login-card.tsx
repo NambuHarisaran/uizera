@@ -4,9 +4,10 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowLeft, Bot, ShieldCheck, Sparkles, Trophy } from "lucide-react";
+import { ArrowLeft, ShieldCheck, Sparkles, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/providers/auth-provider";
+import { Logo } from "@/components/layout/logo";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/shared/spinner";
 import { SITE } from "@/lib/constants";
@@ -56,11 +57,14 @@ export function LoginCard() {
       </Link>
 
       <div className="mb-8 flex flex-col items-center text-center">
-        <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-uipath-orange text-white shadow-xl shadow-brand-500/30">
-          <Bot className="h-7 w-7" />
-        </span>
+        <Logo
+          width={180}
+          height={60}
+          className="mb-3"
+          imgClassName="h-12 w-auto object-contain"
+        />
         <h1 className="font-display text-2xl font-bold">
-          Welcome to UI <span className="text-gradient">Zera</span>
+          Welcome to <span className="text-gradient">UiZera</span>
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           {SITE.tagline}. Sign in with your Google account to join quizzes,

@@ -11,8 +11,10 @@ import {
   Pencil,
   Plus,
   Radio,
+  Sparkles,
   Trash2,
   UserCheck,
+  Wand2,
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -26,6 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Spinner } from "@/components/shared/spinner";
+import { AIQuizModal, type AIQuestion } from "@/components/admin/ai-quiz-modal";
 import { useAdminQuizzes } from "@/lib/hooks";
 import { formatCoins, formatDuration, toDate } from "@/lib/utils";
 import type { Quiz, QuizStatus, QuestionType } from "@/types";
@@ -77,6 +80,7 @@ export default function AdminQuizzesPage() {
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loadingEditId, setLoadingEditId] = useState<string | null>(null);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
   // Assign Host dialog state
   const [assignHostOpen, setAssignHostOpen] = useState(false);
   const [assignHostQuizId, setAssignHostQuizId] = useState<string | null>(null);
@@ -99,6 +103,45 @@ export default function AdminQuizzesPage() {
   const [questions, setQuestions] = useState<QuestionInput[]>([DEFAULT_QUESTION]);
 
   const quizzes = data?.quizzes ?? [];
+
+  const handleApplyAiQuiz = (aiData: {
+    title?: string;
+    description?: string;
+    questions: AIQuestion[];
+    append: boolean;
+  }) => {
+    if (aiData.title && (!title || !editingId)) setTitle(aiData.title);
+    if (aiData.description && (!description || !editingId)) setDescription(aiData.description);
+
+    // If dates are not set yet, set default start (now) and end (in 7 days)
+    if (!startAt) {
+      const now = new Date();
+      setStartAt(format(now, "yyyy-MM-dd'T'HH:mm"));
+    }
+    if (!endAt) {
+      const future = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      setEndAt(format(future, "yyyy-MM-dd'T'HH:mm"));
+    }
+
+    const formatted: QuestionInput[] = aiData.questions.map((q) => ({
+      type: q.type || "mcq",
+      prompt: q.prompt,
+      options: q.options,
+      correctIndices: q.correctIndices && q.correctIndices.length > 0 ? q.correctIndices : [0],
+      explanation: q.explanation || null,
+      points: q.points || 10,
+    }));
+
+    if (aiData.append) {
+      setQuestions((prev) => [...prev, ...formatted]);
+    } else {
+      setQuestions(formatted);
+    }
+
+    if (!open) {
+      setOpen(true);
+    }
+  };
 
   const resetForm = () => {
     setTitle("");
@@ -306,9 +349,18 @@ export default function AdminQuizzesPage() {
           </p>
         </div>
 
-        <Button className="gap-2" onClick={openCreate}>
-          <Plus className="h-4 w-4" /> Create Quiz
-        </Button>
+        <div className="flex items-center gap-2.5">
+          <Button
+            variant="outline"
+            className="gap-2 border-brand-500/40 text-brand-600 dark:text-brand-400 hover:bg-brand-500/10 shadow-sm"
+            onClick={() => setAiModalOpen(true)}
+          >
+            <Sparkles className="h-4 w-4 text-amber-500" /> AI Quiz Assistant
+          </Button>
+          <Button className="gap-2" onClick={openCreate}>
+            <Plus className="h-4 w-4" /> Create Quiz
+          </Button>
+        </div>
 
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
@@ -461,73 +513,123 @@ export default function AdminQuizzesPage() {
 
               {/* Question builder */}
               <div className="space-y-4 border-t pt-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-display font-semibold">Questions ({questions.length})</h3>
-                  <Button type="button" variant="outline" size="sm" onClick={handleAddQuestion}>
-                    <Plus className="mr-1 h-3.5 w-3.5" /> Add Question
-                  </Button>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="font-display font-semibold">Questions ({questions.length})</h3>
+                    <p className="text-[11px] text-muted-foreground">
+                      Select the radio button next to the option to mark it as the correct answer.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setAiModalOpen(true)}
+                      className="gap-1.5 border-brand-500/40 text-brand-600 dark:text-brand-400 hover:bg-brand-500/10 text-xs h-8 shadow-xs"
+                    >
+                      <Sparkles className="h-3.5 w-3.5 text-amber-500" /> Auto-Fill with AI
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={handleAddQuestion} className="h-8 text-xs">
+                      <Plus className="mr-1 h-3.5 w-3.5" /> Add Question
+                    </Button>
+                  </div>
                 </div>
 
-                {questions.map((q, qIdx) => (
-                  <div key={qIdx} className="space-y-3 rounded-lg border p-4 bg-muted/30">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-sm">Question #{qIdx + 1}</span>
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1.5">
-                          <Label className="text-xs text-muted-foreground">Points</Label>
-                          <Input
-                            type="number"
-                            min={1}
-                            max={100}
-                            value={q.points}
-                            onChange={(e) =>
-                              handleQuestionChange(qIdx, "points", Number(e.target.value))
-                            }
-                            className="h-8 w-16 text-xs"
-                          />
+                {questions.map((q, qIdx) => {
+                  const correctIdx = q.correctIndices[0] ?? 0;
+                  return (
+                    <div key={qIdx} className="space-y-3 rounded-xl border p-4 bg-muted/20 hover:border-brand-500/30 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm">Question #{qIdx + 1}</span>
+                          <Badge variant="outline" className="text-[10px] font-medium bg-background text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
+                            ✓ Correct: Option {String.fromCharCode(65 + correctIdx)}
+                          </Badge>
                         </div>
-                        {questions.length > 1 && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemoveQuestion(qIdx)}
-                            className="text-destructive hover:bg-destructive/10"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <Label className="text-xs text-muted-foreground">Points</Label>
+                            <Input
+                              type="number"
+                              min={1}
+                              max={100}
+                              value={q.points}
+                              onChange={(e) =>
+                                handleQuestionChange(qIdx, "points", Number(e.target.value))
+                              }
+                              className="h-8 w-16 text-xs text-center font-mono font-bold"
+                            />
+                          </div>
+                          {questions.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoveQuestion(qIdx)}
+                              className="text-destructive hover:bg-destructive/10 h-8 w-8 p-0"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <Input
+                          placeholder="Question Prompt..."
+                          value={q.prompt}
+                          onChange={(e) => handleQuestionChange(qIdx, "prompt", e.target.value)}
+                          className="font-medium text-sm"
+                        />
+                      </div>
+
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {q.options.map((opt, oIdx) => {
+                          const isCorrect = q.correctIndices.includes(oIdx);
+                          return (
+                            <div
+                              key={oIdx}
+                              className={`flex items-center gap-2 rounded-lg border p-1.5 transition-colors ${
+                                isCorrect
+                                  ? "border-emerald-500/60 bg-emerald-500/10 shadow-xs"
+                                  : "border-border/60 bg-background/60"
+                              }`}
+                            >
+                              <label className="flex items-center justify-center p-1 cursor-pointer" title={`Mark Option ${String.fromCharCode(65 + oIdx)} as correct`}>
+                                <input
+                                  type="radio"
+                                  name={`correct-${qIdx}`}
+                                  checked={isCorrect}
+                                  onChange={() => handleQuestionChange(qIdx, "correctIndices", [oIdx])}
+                                  className="h-4 w-4 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
+                                />
+                              </label>
+                              <span className="text-[11px] font-bold font-mono text-muted-foreground w-4 text-center">
+                                {String.fromCharCode(65 + oIdx)}
+                              </span>
+                              <Input
+                                value={opt}
+                                onChange={(e) => handleOptionChange(qIdx, oIdx, e.target.value)}
+                                placeholder={`Option ${oIdx + 1}`}
+                                className={`h-8 text-xs ${isCorrect ? "font-semibold text-emerald-700 dark:text-emerald-300" : ""}`}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div>
+                        <Input
+                          placeholder="Optional explanation for correct answer..."
+                          value={q.explanation ?? ""}
+                          onChange={(e) => handleQuestionChange(qIdx, "explanation", e.target.value)}
+                          className="h-7 text-[11px] text-muted-foreground bg-background/40"
+                        />
                       </div>
                     </div>
-
-                    <div>
-                      <Input
-                        placeholder="Question Prompt..."
-                        value={q.prompt}
-                        onChange={(e) => handleQuestionChange(qIdx, "prompt", e.target.value)}
-                      />
-                    </div>
-
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {q.options.map((opt, oIdx) => (
-                        <div key={oIdx} className="flex items-center gap-2">
-                          <input
-                            type="radio"
-                            name={`correct-${qIdx}`}
-                            checked={q.correctIndices.includes(oIdx)}
-                            onChange={() => handleQuestionChange(qIdx, "correctIndices", [oIdx])}
-                          />
-                          <Input
-                            value={opt}
-                            onChange={(e) => handleOptionChange(qIdx, oIdx, e.target.value)}
-                            placeholder={`Option ${oIdx + 1}`}
-                            className="h-8 text-xs"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               <Button onClick={handleSaveQuiz} disabled={saving} className="w-full gap-2">
@@ -700,6 +802,14 @@ export default function AdminQuizzesPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Gemini AI Quiz Assistant Modal */}
+      <AIQuizModal
+        open={aiModalOpen}
+        onOpenChange={setAiModalOpen}
+        onApply={handleApplyAiQuiz}
+        existingQuestionsCount={questions.length}
+      />
     </div>
   );
 }

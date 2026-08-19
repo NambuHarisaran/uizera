@@ -149,7 +149,7 @@ export async function GET(
         }
       }).length;
 
-      if (isPrivileged || session.revealAnswer) {
+      if (session.revealAnswer) {
         optionCounts = new Array(currentQ.options.length).fill(0);
         for (const r of responsesRows) {
           try {

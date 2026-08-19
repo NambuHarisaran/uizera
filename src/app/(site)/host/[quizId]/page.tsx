@@ -486,7 +486,7 @@ export default function HostLiveQuizStagePage({
                               : `${style.border} ${style.bg} ${style.text}`
                           }`}
                         >
-                          {optionCounts && (
+                          {isRevealed && optionCounts && (
                             <motion.span
                               initial={{ width: 0 }}
                               animate={{ width: `${pct}%` }}
@@ -501,7 +501,7 @@ export default function HostLiveQuizStagePage({
 
                           <span className="relative flex-1 text-base sm:text-lg">{opt}</span>
 
-                          {optionCounts && (
+                          {isRevealed && optionCounts && (
                             <span className="relative shrink-0 font-mono text-sm px-2 py-0.5 rounded-lg bg-black/10">
                               {count} ({pct}%)
                             </span>

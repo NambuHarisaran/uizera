@@ -434,7 +434,7 @@ export default function ParticipantLiveQuizPage({
                   const isCorrectOption = revealedCorrect?.includes(oIdx);
                   const showResult = isRevealed && revealedCorrect !== null;
                   const pct =
-                    optionCounts && totalAnswered > 0
+                    isRevealed && optionCounts && totalAnswered > 0
                       ? Math.round(((optionCounts[oIdx] ?? 0) / totalAnswered) * 100)
                       : null;
 

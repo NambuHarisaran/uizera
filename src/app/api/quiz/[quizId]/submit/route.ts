@@ -25,10 +25,20 @@ const SUBMIT_GRACE_MS = 15_000;
 /** Minimum XP awarded even for a zero-score attempt (participation reward). */
 const MIN_PARTICIPATION_XP = 5;
 
-/** +10% coins if finished in the first 50% of allotted time with ≥70% accuracy. */
-const SPEED_BONUS_MULTIPLIER = 1.1;
-const SPEED_THRESHOLD_RATIO = 0.5;
-const SPEED_MIN_ACCURACY = 0.7;
+/**
+ * Graduated speed bonus: up to +20% extra coins, linearly scaled by how
+ * quickly the attempt was submitted — full bonus for instant, zero bonus at
+ * the deadline. Only applied when accuracy ≥ 70% (prevents rewarding fast
+ * guessing). Formula: multiplier = 1.0 + 0.2 × (1 − timeTaken/duration).
+ */
+const SPEED_MAX_BONUS = 0.2; // +20% at best
+const SPEED_MIN_ACCURACY = 0.7; // must score ≥70% to get any bonus
+
+function speedMultiplier(timeTakenMs: number, durationMs: number, accuracyRatio: number): number {
+  if (accuracyRatio < SPEED_MIN_ACCURACY || durationMs <= 0) return 1;
+  const speedFraction = Math.max(0, Math.min(1, 1 - timeTakenMs / durationMs));
+  return 1 + SPEED_MAX_BONUS * speedFraction;
+}
 
 /**
  * POST /api/quiz/[quizId]/submit
@@ -129,16 +139,15 @@ export async function POST(
         Math.round(accuracyRatio * xpRewardTotal)
       );
 
-      // Speed bonus: finish in ≤50% of allotted time with ≥70% accuracy
-      const timeTakenMs = now - toMillis(attempt.startedAt);
+      // Graduated speed bonus: 0%–20% extra coins based on how fast the
+      // attempt was submitted and whether accuracy meets the threshold.
+      const timeTakenMs = Math.max(0, now - toMillis(attempt.startedAt));
       const durationMs = quiz.durationSeconds * 1000;
-      const timeRatio = durationMs > 0 ? Math.min(timeTakenMs / durationMs, 1) : 1;
-      const isSpeedBonus =
-        timeRatio <= SPEED_THRESHOLD_RATIO && accuracyRatio >= SPEED_MIN_ACCURACY;
+      const multiplier = speedMultiplier(timeTakenMs, durationMs, accuracyRatio);
+      // isSpeedBonus = true if the player earned any bonus (for UI display)
+      const isSpeedBonus = multiplier > 1;
 
-      const coinsEarned = Math.round(
-        score * quiz.coinsPerPoint * (isSpeedBonus ? SPEED_BONUS_MULTIPLIER : 1)
-      );
+      const coinsEarned = Math.round(score * quiz.coinsPerPoint * multiplier);
 
       tx.update(attemptRef, {
         status: "submitted",
@@ -148,6 +157,7 @@ export async function POST(
         coinsEarned,
         xpEarned,
         isSpeedBonus,
+        timeTakenMs,   // stored for leaderboard tiebreaking — lower = faster
         displayName,
         submittedAt: FieldValue.serverTimestamp(),
       });
@@ -158,6 +168,7 @@ export async function POST(
         coinsEarned,
         xpEarned,
         isSpeedBonus,
+        timeTakenMs,
         maxScore: attempt.maxScore,
       };
     });

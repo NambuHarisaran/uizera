@@ -68,11 +68,27 @@ export async function GET(
           displayName: (r.displayName as string) || "Participant",
           score: (r.totalScore as number) || 0,
           totalCoins: (r.totalScore as number) || 0,
+          // Lower totalAnswerMs = faster overall — used as tiebreaker.
+          // Documents from before this field existed get Infinity so they
+          // sort after players whose speed we do know, which is fair.
+          totalAnswerMs: typeof r.totalAnswerMs === "number" ? r.totalAnswerMs : Infinity,
           answers: r.answers || {},
         };
       })
-      .sort((a, b) => b.score - a.score)
+      // Primary: higher score wins. Secondary: lower totalAnswerMs (faster) wins.
+      .sort((a, b) => b.score - a.score || a.totalAnswerMs - b.totalAnswerMs)
       .slice(0, 15);
+
+    // Assign Olympic-style dense ranks: tied players share a rank, no gaps.
+    // e.g. [100pts, 100pts, 90pts] → ranks [1, 1, 2]
+    let rank = 1;
+    for (let i = 0; i < leaderboard.length; i++) {
+      if (i > 0 && (leaderboard[i]!.score !== leaderboard[i - 1]!.score ||
+          leaderboard[i]!.totalAnswerMs !== leaderboard[i - 1]!.totalAnswerMs)) {
+        rank = i + 1;
+      }
+      (leaderboard[i] as any).rank = rank;
+    }
 
     // Include answer key only for admin
     const userSnap = await db.collection("users").doc(user.uid).get();

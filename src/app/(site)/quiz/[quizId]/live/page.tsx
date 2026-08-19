@@ -34,8 +34,11 @@ import type { LiveQuizSession } from "@/types";
 
 interface AnswerRecord {
   selected: number[];
-  correct: boolean;
-  points: number;
+  // correct and points are undefined until the host reveals the answer.
+  // Never trust values injected client-side before reveal — the server
+  // does not send them in the submit response to prevent cheating.
+  correct?: boolean;
+  points?: number;
 }
 
 export default function ParticipantLiveQuizPage({
@@ -174,19 +177,22 @@ export default function ParticipantLiveQuizPage({
 
     setSubmittingQ(questionId);
     try {
-      const res = await postJson<{ isCorrect: boolean; pointsEarned: number; totalScore: number }>(
+      const res = await postJson<{ received: boolean; totalScore: number }>(
         `/api/live-quiz/${quizId}/answer`,
         { questionId, questionIndex: currentQIndex, selected: [optionIdx] }
       );
       const data = unwrap(res);
+      // Store only the selected index — correct/points are intentionally
+      // withheld until the host reveals the answer to prevent cross-device
+      // answer sharing. The reveal flow (isRevealed) will update myAnswers
+      // with the real result via the next loadData() call.
       setMyAnswers((prev) => ({
         ...prev,
-        [questionId]: { selected: [optionIdx], correct: data.isCorrect, points: data.pointsEarned },
+        [questionId]: { selected: [optionIdx] },
       }));
       setMyScore(data.totalScore);
-      toast.success(
-        data.isCorrect ? `Answer locked in! +${data.pointsEarned} pts ⚡` : "Answer locked in!"
-      );
+      // Neutral confirmation — never hint at correct/incorrect before reveal.
+      toast.success("Answer locked in! ⏳ Wait for the reveal...");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not submit your answer.");
     } finally {
@@ -494,16 +500,25 @@ export default function ParticipantLiveQuizPage({
                   className={`rounded-2xl border p-4 text-sm font-bold flex items-center justify-center gap-2 ${
                     myAnswerForCurrent.correct
                       ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-                      : "border-destructive/40 bg-destructive/15 text-destructive"
+                      : myAnswerForCurrent.correct === false
+                      ? "border-destructive/40 bg-destructive/15 text-destructive"
+                      : "border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300"
                   }`}
                 >
-                  {myAnswerForCurrent.correct ? (
+                  {myAnswerForCurrent.correct === true ? (
                     <>
-                      <CheckCircle2 className="h-5 w-5" /> Correct! +{myAnswerForCurrent.points} pts ⚡
+                      <CheckCircle2 className="h-5 w-5" /> Correct! +{myAnswerForCurrent.points ?? 0} pts ⚡
                     </>
-                  ) : (
+                  ) : myAnswerForCurrent.correct === false ? (
                     <>
                       <XCircle className="h-5 w-5" /> Not quite — 0 pts
+                    </>
+                  ) : (
+                    // correct is undefined = answer was submitted but reveal data
+                    // not yet loaded. loadData() is triggered by the Firestore
+                    // snapshot and will populate correct/points momentarily.
+                    <>
+                      <Spinner className="h-4 w-4" /> Loading result...
                     </>
                   )}
                 </motion.div>

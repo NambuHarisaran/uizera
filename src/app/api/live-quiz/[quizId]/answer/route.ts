@@ -97,9 +97,14 @@ export async function POST(
           correct: isCorrect,
           points: pointsEarned,
           answeredAtMs: Date.now(),
+          elapsedMs,
         },
       };
       const newTotal = (responseSnap.data()?.totalScore ?? 0) + pointsEarned;
+      // Accumulate total answer time — lower = faster overall. Used as a
+      // tiebreaker when two players share the same score (fairer than arbitrary
+      // document order).
+      const newTotalAnswerMs = (responseSnap.data()?.totalAnswerMs ?? 0) + elapsedMs;
 
       tx.set(
         responseRef,
@@ -108,6 +113,7 @@ export async function POST(
           displayName,
           answers: newAnswers,
           totalScore: newTotal,
+          totalAnswerMs: newTotalAnswerMs,
           updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true }
@@ -119,7 +125,13 @@ export async function POST(
       // no refresh needed.
       tx.update(sessionRef, { lastAnswerAt: FieldValue.serverTimestamp() });
 
-      return { isCorrect, pointsEarned, totalScore: newTotal };
+      // ⚠️  Do NOT return isCorrect or pointsEarned here.
+      // Leaking the result before the host reveals it allows a student on one
+      // device to relay "correct!" to teammates on other devices — a real
+      // cheating vector. The correct answer is revealed to everyone at the
+      // same time when the host calls toggleAnswer (revealAnswer = true),
+      // at which point the client already has the full result via myAnswers.
+      return { received: true, totalScore: newTotal };
     });
 
     return jsonOk(result);

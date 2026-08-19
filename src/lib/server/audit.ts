@@ -18,7 +18,9 @@ export async function audit(entry: {
       .collection("auditLogs")
       .add({
         ...entry,
-        details: entry.details ?? {},
+        details: Object.fromEntries(
+          Object.entries(entry.details ?? {}).filter(([, v]) => v !== undefined)
+        ),
         createdAt: FieldValue.serverTimestamp(),
       });
   } catch (err) {

@@ -14,10 +14,10 @@ export const questionSchema = z
     id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).optional(),
     type: z.enum(["mcq", "single", "true_false", "multi_select", "image"]).transform((t) => (t === "single" ? "mcq" : t)),
     prompt: z.string().min(1).max(1000),
-    imageUrl: z.string().url().max(1024).nullable().optional(),
+    imageUrl: z.union([z.string().url().max(1024), z.literal("")]).nullish().transform((v) => (v ? v : null)),
     options: z.array(z.string().min(1).max(300)).min(2).max(8),
     correctIndices: z.array(z.number().int().min(0).max(7)).min(1).max(8),
-    explanation: z.string().max(2000).nullable().optional(),
+    explanation: z.string().max(2000).nullish().transform((v) => (v ? v : null)),
     points: z.number().int().min(1).max(100),
   })
 
@@ -58,7 +58,7 @@ export const quizUpsertSchema = z
   .object({
     title: z.string().min(3).max(160),
     description: z.string().max(2000).default(""),
-    coverImage: z.string().url().max(1024).nullable().optional(),
+    coverImage: z.union([z.string().url().max(1024), z.literal("")]).nullish().transform((v) => (v ? v : null)),
     /** Website quizzes list publicly per status. Live-session quizzes never
      * appear in the public list or the self-paced take-quiz flow — they're
      * only reachable via the Live Stage link/QR the instructor shares. */

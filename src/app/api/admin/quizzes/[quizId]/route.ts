@@ -139,13 +139,13 @@ export async function PUT(
       .where(eq(quizzes.id, quizId));
 
     // Delete existing questions & answer keys
-    await db.delete(quizQuestions).where(eq(quizQuestions.quizId, quizId));
     await db.delete(quizAnswerKeys).where(eq(quizAnswerKeys.quizId, quizId));
+    await db.delete(quizQuestions).where(eq(quizQuestions.quizId, quizId));
 
     // Re-insert questions and keys
     for (let i = 0; i < input.questions.length; i++) {
       const q = input.questions[i]!;
-      const qId = q.id ?? `q_${i + 1}`;
+      const qId = `${quizId}_q${i + 1}_${Math.random().toString(36).slice(2, 8)}`;
 
       await db.insert(quizQuestions).values({
         id: qId,

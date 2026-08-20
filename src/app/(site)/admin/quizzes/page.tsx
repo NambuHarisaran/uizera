@@ -279,25 +279,66 @@ export default function AdminQuizzesPage() {
   };
 
   const handleSaveQuiz = async () => {
-    if (!title || !startAt || !endAt || questions.length === 0) {
+    if (!title.trim() || !startAt || !endAt || questions.length === 0) {
       toast.error("Please fill in all required quiz fields and at least 1 question.");
       return;
     }
 
+    const startMs = new Date(startAt).getTime();
+    const endMs = new Date(endAt).getTime();
+    if (isNaN(startMs) || isNaN(endMs)) {
+      toast.error("Please provide valid start and end dates.");
+      return;
+    }
+    if (endMs <= startMs) {
+      toast.error("End date must be after start date.");
+      return;
+    }
+
+    // Validate and sanitize questions
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i]!;
+      if (!q.prompt.trim()) {
+        toast.error(`Question #${i + 1} is missing a prompt.`);
+        return;
+      }
+      if (!q.options || q.options.length < 2) {
+        toast.error(`Question #${i + 1} must have at least 2 options.`);
+        return;
+      }
+      const emptyOpt = q.options.some((opt) => !opt.trim());
+      if (emptyOpt) {
+        toast.error(`Question #${i + 1} has empty options. Please fill them in.`);
+        return;
+      }
+      if (!q.correctIndices || q.correctIndices.length === 0) {
+        toast.error(`Question #${i + 1} must have a correct option selected.`);
+        return;
+      }
+    }
+
+    const sanitizedQuestions = questions.map((q) => ({
+      ...q,
+      prompt: q.prompt.trim(),
+      options: q.options.map((opt) => opt.trim()),
+      explanation: q.explanation?.trim() || null,
+      points: Number(q.points) || 10,
+    }));
+
     setSaving(true);
     try {
       const body = {
-        title,
-        description,
+        title: title.trim(),
+        description: description.trim(),
         mode,
         status: mode === "live" ? "draft" : status,
-        startAt: new Date(startAt).getTime(),
-        endAt: new Date(endAt).getTime(),
+        startAt: startMs,
+        endAt: endMs,
         durationSeconds: Number(durationSeconds),
         coinsPerPoint: Number(coinsPerPoint),
         xpReward: Number(xpReward),
         settings: { ...settings, maxAttempts: Number(maxAttempts) },
-        questions,
+        questions: sanitizedQuestions,
       };
 
       const res = await fetch(

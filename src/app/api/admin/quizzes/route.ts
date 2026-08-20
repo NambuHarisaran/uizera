@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
     // Insert questions and answer keys
     for (let i = 0; i < input.questions.length; i++) {
       const q = input.questions[i]!;
-      const qId = q.id ?? `q_${i + 1}`;
+      const qId = `${quizId}_q${i + 1}_${Math.random().toString(36).slice(2, 8)}`;
 
       await db.insert(quizQuestions).values({
         id: qId,

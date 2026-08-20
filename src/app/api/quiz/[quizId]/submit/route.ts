@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { quizAttempts, users } from "@/lib/db/schema";
 import {
@@ -116,8 +116,8 @@ export async function POST(
     const coinsEarned = Math.round(score * quiz.coinsPerPoint * multiplier);
     const displayName = userRecord?.displayName ?? "Member";
 
-    // Update attempt record in D1
-    await db
+    // Atomically transition attempt status from in_progress to submitted
+    const updateRes = await db
       .update(quizAttempts)
       .set({
         status: "submitted",
@@ -129,14 +129,19 @@ export async function POST(
         displayName,
         submittedAt: now,
       })
-      .where(eq(quizAttempts.id, body.attemptId));
+      .where(
+        and(
+          eq(quizAttempts.id, body.attemptId),
+          eq(quizAttempts.status, "in_progress")
+        )
+      );
 
     let newBadges: string[] = [];
     if (coinsEarned > 0 || xpEarned > 0) {
       try {
         const award = await awardCoins({
           uid: user.uid,
-          amount: Math.max(1, coinsEarned),
+          amount: coinsEarned,
           xpAmount: xpEarned,
           source: "quiz",
           reason: `Quiz: ${quiz.title}`,

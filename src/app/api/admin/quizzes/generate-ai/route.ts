@@ -1,11 +1,12 @@
 import { NextRequest } from "next/server";
-import { handleApi, jsonError, jsonOk, parseBody, requireAdmin } from "@/lib/server/api";
+import { assertSameOrigin, handleApi, jsonError, jsonOk, parseBody, requireAdmin } from "@/lib/server/api";
 import { z } from "zod";
+
 
 export const runtime = "nodejs";
 
 const requestSchema = z.object({
-  prompt: z.string().min(3, "Prompt or quiz text must be at least 3 characters."),
+  prompt: z.string().min(3, "Prompt or quiz text must be at least 3 characters.").max(30000, "Prompt is too long (max 30,000 characters)."),
   apiKey: z.string().optional(),
   count: z.number().int().min(1).max(50).optional(),
 });
@@ -28,6 +29,7 @@ interface ParsedQuizResponse {
 
 export async function POST(req: NextRequest) {
   return handleApi(async () => {
+    assertSameOrigin(req);
     await requireAdmin();
     const { prompt, apiKey: clientApiKey, count } = await parseBody(req, requestSchema);
 
@@ -73,8 +75,8 @@ CRITICAL RULES:
   ]
 }`;
 
-    // Try primary model (gemini-2.5-flash), with fallback to gemini-1.5-flash
-    const models = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"];
+    // Try primary models: gemini-2.0-flash, gemini-1.5-flash, gemini-1.5-pro
+    const models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"];
     let lastError: string | null = null;
     let rawText = "";
 
@@ -88,10 +90,13 @@ CRITICAL RULES:
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            system_instruction: {
+              parts: [{ text: systemInstruction }],
+            },
             contents: [
               {
                 role: "user",
-                parts: [{ text: `${systemInstruction}\n\nUSER INPUT / QUIZ DATA:\n${prompt}` }],
+                parts: [{ text: `USER INPUT / QUIZ DATA:\n${prompt}` }],
               },
             ],
             generationConfig: {
@@ -116,6 +121,7 @@ CRITICAL RULES:
         lastError = err instanceof Error ? err.message : "Network error contacting Gemini API.";
       }
     }
+
 
     if (!rawText) {
       return jsonError(

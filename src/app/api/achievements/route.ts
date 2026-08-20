@@ -2,7 +2,8 @@ import { NextRequest } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { users, coinTransactions } from "@/lib/db/schema";
-import { handleApi, jsonOk, requireUser } from "@/lib/server/api";
+import { getSessionUser } from "@/lib/auth/session";
+import { handleApi, jsonOk } from "@/lib/server/api";
 import { levelForXp, levelProgress, xpForLevel } from "@/lib/utils";
 import type { Quest } from "@/types";
 
@@ -10,17 +11,20 @@ export const runtime = "nodejs";
 
 export async function GET(_req: NextRequest) {
   return handleApi(async () => {
-    const user = await requireUser();
+    const user = await getSessionUser();
 
     const [profile, claimedTxs] = await Promise.all([
-      db.query.users.findFirst({ where: eq(users.uid, user.uid) }),
-      db.query.coinTransactions.findMany({
-        where: and(
-          eq(coinTransactions.uid, user.uid),
-          eq(coinTransactions.source, "quest_reward")
-        ),
-      }),
+      user ? db.query.users.findFirst({ where: eq(users.uid, user.uid) }) : Promise.resolve(null),
+      user
+        ? db.query.coinTransactions.findMany({
+            where: and(
+              eq(coinTransactions.uid, user.uid),
+              eq(coinTransactions.source, "quest_reward")
+            ),
+          })
+        : Promise.resolve([]),
     ]);
+
 
     const claimedIds = new Set(claimedTxs.map((t) => t.refId).filter(Boolean));
 

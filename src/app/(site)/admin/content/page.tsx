@@ -34,18 +34,24 @@ export default function AdminContentPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: eventTitle,
-          description: eventDesc,
-          date: Date.now(),
-          venue: eventVenue,
-          published: true,
-          speakers: [],
+          data: {
+            title: eventTitle,
+            description: eventDesc,
+            date: Date.now(),
+            venue: eventVenue || "PSNACET Campus",
+            published: true,
+            speakers: [],
+          },
         }),
       });
       if (!res.ok) throw new Error("Failed to create event");
       toast.success("Event created!");
       setEventOpen(false);
+      setEventTitle("");
+      setEventDesc("");
+      setEventVenue("");
       refetchEvents();
+
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error creating event.");
     }

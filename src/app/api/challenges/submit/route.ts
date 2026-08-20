@@ -82,11 +82,14 @@ export async function POST(req: NextRequest) {
           notes: body.notes ?? null,
           status: "pending",
           feedback: null,
+          coinsAwarded: 0,
+          reviewedBy: null,
           displayName,
           updatedAt: now,
           history: JSON.stringify(history),
         })
         .where(eq(challengeSubmissions.id, submissionId));
+
     } else {
       await db.insert(challengeSubmissions).values({
         id: submissionId,

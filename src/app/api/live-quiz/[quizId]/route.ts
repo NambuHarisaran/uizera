@@ -87,20 +87,13 @@ export async function GET(
     const isKicked = Boolean(myParticipant?.kicked);
 
     const leaderboard = responsesRows
-      .map((r) => {
-        let parsedAnswers: any = {};
-        try {
-          parsedAnswers = JSON.parse(r.answers ?? "{}");
-        } catch {}
-        return {
-          uid: r.uid,
-          displayName: r.displayName,
-          score: r.totalScore,
-          totalCoins: r.totalScore,
-          totalAnswerMs: r.totalAnswerMs || Infinity,
-          answers: parsedAnswers,
-        };
-      })
+      .map((r) => ({
+        uid: r.uid,
+        displayName: r.displayName,
+        score: r.totalScore,
+        totalCoins: r.totalScore,
+        totalAnswerMs: r.totalAnswerMs || Infinity,
+      }))
       .sort((a, b) => b.score - a.score || a.totalAnswerMs - b.totalAnswerMs)
       .slice(0, 15);
 
@@ -134,6 +127,16 @@ export async function GET(
       myAnswers = JSON.parse(myResponse?.answers ?? "{}");
     } catch {}
     const myScore = myResponse?.totalScore ?? 0;
+
+    // Sanitize myAnswers so player cannot know correctness for active question before reveal
+    const sanitizedMyAnswers: Record<string, { selected: number[]; correct: boolean; points: number }> = { ...myAnswers };
+    if (!session.revealAnswer && !isPrivileged && currentQ && sanitizedMyAnswers[currentQ.id]) {
+      sanitizedMyAnswers[currentQ.id] = {
+        selected: sanitizedMyAnswers[currentQ.id].selected,
+        correct: false,
+        points: 0,
+      };
+    }
 
     let answeredCount = 0;
     let optionCounts: number[] | null = null;
@@ -187,7 +190,7 @@ export async function GET(
       leaderboard,
       participants,
       isKicked,
-      myAnswers,
+      myAnswers: sanitizedMyAnswers,
       myScore,
       answeredCount,
       optionCounts,
@@ -195,6 +198,7 @@ export async function GET(
       userUid: user.uid,
       answerKey,
     });
+
   });
 }
 

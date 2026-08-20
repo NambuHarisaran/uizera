@@ -18,7 +18,7 @@ import {
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,16 +31,29 @@ import type { Challenge, ChallengeSubmission, SubmissionStatus } from "@/types";
 
 const submissionStatusConfig: Record<
   SubmissionStatus,
-  { label: string; variant?: "warning" | "success"; color?: string; icon: typeof CheckCircle }
+  { label: string; variant?: "warning" | "success" | "outline" | "default" | "secondary" | "destructive"; color?: string; icon: typeof CheckCircle }
 > = {
   pending: { label: "Pending Review", variant: "warning", icon: Clock },
   approved: { label: "Approved", variant: "success", icon: CheckCircle },
   rejected: { label: "Rejected", color: "bg-destructive/10 text-destructive", icon: XCircle },
 };
 
-function SubmitDialog({ challenge, onSuccess }: { challenge: Challenge; onSuccess: () => void }) {
-  const [link, setLink] = useState("");
-  const [notes, setNotes] = useState("");
+const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "outline" }> = {
+  open: { label: "Active", variant: "default" },
+  closed: { label: "Closed", variant: "secondary" },
+};
+
+function SubmitDialog({
+  challenge,
+  existing,
+  onSuccess,
+}: {
+  challenge: Challenge;
+  existing?: ChallengeSubmission;
+  onSuccess: () => void;
+}) {
+  const [link, setLink] = useState(existing?.link ?? "");
+  const [notes, setNotes] = useState(existing?.notes ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -64,7 +77,7 @@ function SubmitDialog({ challenge, onSuccess }: { challenge: Challenge; onSucces
         const body = await res.json().catch(() => null);
         throw new Error((body as { error?: string })?.error ?? "Submission failed.");
       }
-      toast.success("Challenge submitted!");
+      toast.success(existing ? "Submission updated!" : "Challenge submitted!");
       setOpen(false);
       onSuccess();
     } catch (err) {
@@ -77,13 +90,13 @@ function SubmitDialog({ challenge, onSuccess }: { challenge: Challenge; onSucces
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="gap-2">
-          <Upload className="h-4 w-4" /> Submit
+        <Button variant={existing ? "outline" : "default"} size={existing ? "sm" : "default"} className="gap-2">
+          <Upload className="h-4 w-4" /> {existing ? "Update Submission" : "Submit"}
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Submit: {challenge.title}</DialogTitle>
+          <DialogTitle>{existing ? "Update Submission" : "Submit"}: {challenge.title}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 pt-2">
           <div>
@@ -108,10 +121,14 @@ function SubmitDialog({ challenge, onSuccess }: { challenge: Challenge; onSucces
               className="mt-1"
             />
           </div>
-          <Button onClick={handleSubmit} disabled={submitting} className="w-full gap-2">
-            {submitting ? <Spinner className="text-white" /> : <FileUp className="h-4 w-4" />}
-            Submit Challenge
-          </Button>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSubmit} disabled={submitting}>
+              {submitting ? <Spinner className="text-white" /> : existing ? "Save Changes" : "Submit Challenge"}
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
@@ -127,66 +144,57 @@ function ChallengeCard({
   submission?: ChallengeSubmission;
   onSubmit: () => void;
 }) {
-  const deadline = toDate(challenge.deadline);
-  const isPast = deadline ? deadline.getTime() < Date.now() : false;
-  const isOpen = challenge.status === "open" && !isPast;
+  const dl = toDate(challenge.deadline);
+  const isOpen = challenge.status === "open" && Boolean(dl && Date.now() < dl.getTime());
+  const cfg = statusConfig[challenge.status] ?? statusConfig.open;
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
     >
-      <Card className="transition-all duration-300 hover:border-brand-500/30">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <Badge variant="outline">Week {challenge.week}</Badge>
-            <div className="flex items-center gap-1.5 text-sm font-semibold text-amber-500">
+      <Card className="h-full flex flex-col transition-all duration-300 hover:shadow-lg hover:border-brand-500/30">
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between gap-2">
+            <Badge variant={cfg.variant}>{cfg.label}</Badge>
+            <div className="flex items-center gap-1 text-sm font-semibold text-amber-500">
               <Coins className="h-4 w-4" />
               {formatCoins(challenge.coins)} coins
             </div>
           </div>
-          <CardTitle className="text-xl">{challenge.title}</CardTitle>
+          <CardTitle className="mt-2 text-lg">{challenge.title}</CardTitle>
+          <CardDescription className="line-clamp-3">
+            {challenge.description}
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {challenge.description && (
-            <p className="text-sm leading-relaxed text-muted-foreground">{challenge.description}</p>
-          )}
 
-          {challenge.instructions && (
-            <div className="rounded-lg border bg-muted/50 p-4">
-              <h4 className="mb-2 text-sm font-semibold">Instructions</h4>
-              <p className="whitespace-pre-wrap text-sm text-muted-foreground">{challenge.instructions}</p>
+        <CardContent className="flex-1 flex flex-col justify-between space-y-4">
+          {/* Metadata */}
+          <div className="space-y-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-3.5 w-3.5" />
+              Deadline: {dl ? format(dl, "PPp") : "—"}
             </div>
-          )}
 
-          {challenge.resources.length > 0 && (
-            <div>
-              <h4 className="mb-2 text-sm font-semibold">Resources</h4>
+            {challenge.resources && challenge.resources.length > 0 && (
               <div className="space-y-1">
-                {challenge.resources.map((r, i) => (
-                  <a
-                    key={i}
-                    href={r.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-sm text-brand-500 hover:underline"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                    {r.label}
-                  </a>
-                ))}
+                <span className="font-medium text-foreground">Resources:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {challenge.resources.map((r, i) => (
+                    <a
+                      key={i}
+                      href={r.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs text-brand-500 hover:underline"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      {r.label || (r as any).title || "Resource"}
+                    </a>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            {deadline && (
-              <span className="flex items-center gap-1.5">
-                <Calendar className="h-4 w-4" />
-                Deadline: {format(deadline, "PPp")}
-              </span>
             )}
           </div>
 
@@ -199,7 +207,7 @@ function ChallengeCard({
                   const cfg = submissionStatusConfig[submission.status];
                   const Icon = cfg.icon;
                   return (
-                    <Badge variant={cfg.variant} className={cfg.color}>
+                    <Badge variant={cfg.variant as any} className={cfg.color}>
                       <Icon className="mr-1 h-3 w-3" />
                       {cfg.label}
                     </Badge>
@@ -228,6 +236,11 @@ function ChallengeCard({
                   <Coins className="h-3.5 w-3.5" />
                   {formatCoins(submission.coinsAwarded)} coins awarded
                 </p>
+              )}
+              {submission.status !== "approved" && isOpen && (
+                <div className="mt-4 pt-3 border-t">
+                  <SubmitDialog challenge={challenge} existing={submission} onSuccess={onSubmit} />
+                </div>
               )}
             </div>
           ) : isOpen ? (

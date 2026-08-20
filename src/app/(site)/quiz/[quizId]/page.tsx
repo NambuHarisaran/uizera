@@ -62,6 +62,7 @@ export default function QuizPlayPage({ params }: { params: Promise<{ quizId: str
   const answersRef = useRef<Record<string, number[]>>({});
   const attemptIdRef = useRef<string | null>(null);
   const submittingRef = useRef(false);
+  const deadlineAtRef = useRef<number | null>(null);
 
   // Keep refs in sync with state
   useEffect(() => { answersRef.current = answers; }, [answers]);
@@ -86,7 +87,7 @@ export default function QuizPlayPage({ params }: { params: Promise<{ quizId: str
       });
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        throw new Error(err?.error ?? "Failed to submit quiz.");
+        throw new Error(err?.error ?? "Submission failed.");
       }
       toast.success("Quiz submitted successfully!");
       router.push(`/quiz/${quizId}/results?attemptId=${id}`);
@@ -97,22 +98,19 @@ export default function QuizPlayPage({ params }: { params: Promise<{ quizId: str
     }
   }, [quizId, router]);
 
-  // ── Countdown timer — uses deadlineAt not durationSeconds ─────────────
+  // ── Countdown timer — uses wall-clock calculation against deadlineAt ─────────────
   useEffect(() => {
-    if (timeLeft === null || timeLeft <= 0 || !attempting) return;
+    if (!attempting || !deadlineAtRef.current) return;
     const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev === null || prev <= 1) {
-          clearInterval(timer);
-          // Auto-submit using ref — never stale
-          void handleSubmitQuiz(answersRef.current);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+      const remaining = Math.max(0, Math.ceil((deadlineAtRef.current! - Date.now()) / 1000));
+      setTimeLeft(remaining);
+      if (remaining <= 0) {
+        clearInterval(timer);
+        void handleSubmitQuiz(answersRef.current);
+      }
+    }, 500);
     return () => clearInterval(timer);
-  }, [timeLeft, attempting, handleSubmitQuiz]);
+  }, [attempting, handleSubmitQuiz]);
 
   // ── Debounced auto-save ──────────────────────────────────────────────────
   const debouncedSave = useMemo(
@@ -149,6 +147,7 @@ export default function QuizPlayPage({ params }: { params: Promise<{ quizId: str
       const result = await res.json();
       setAttemptId(result.data.attemptId);
       setQuestions(result.data.questions);
+      deadlineAtRef.current = result.data.deadlineAt;
       // Use deadlineAt so timer is resume-safe after a hard refresh
       const secondsLeft = Math.max(
         0,
@@ -167,6 +166,7 @@ export default function QuizPlayPage({ params }: { params: Promise<{ quizId: str
       setAttempting(false);
     }
   };
+
 
   // ── Answer selection (type-aware) ─────────────────────────────────────────
   const handleOptionSelect = (qId: string, optionIdx: number, type: QuestionType) => {

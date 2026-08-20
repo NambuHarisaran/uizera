@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Camera, X } from "lucide-react";
 import { Spinner } from "@/components/shared/spinner";
@@ -12,6 +12,16 @@ export function GalleryContent() {
   const { data, isLoading } = useGallery();
   const items = (data?.items ?? []) as GalleryItem[];
   const [selected, setSelected] = useState<GalleryItem | null>(null);
+
+  useEffect(() => {
+    if (!selected) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelected(null);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selected]);
+
 
   return (
     <div className="pb-24">

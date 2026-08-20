@@ -39,11 +39,11 @@ export async function POST(req: NextRequest) {
     const body = await parseBody(req, profileUpdateSchema);
 
     const updates: Record<string, any> = {};
-    if (body.displayName !== undefined) updates.displayName = body.displayName;
+    if (body.displayName !== undefined) updates.displayName = body.displayName.trim();
     if (body.department !== undefined) updates.department = body.department;
     if (body.year !== undefined) updates.year = body.year;
-    if (body.regNo !== undefined) updates.regNo = body.regNo;
-    if (body.bio !== undefined) updates.bio = body.bio;
+    if (body.regNo !== undefined) updates.regNo = body.regNo?.trim() || null;
+    if (body.bio !== undefined) updates.bio = body.bio?.trim() || null;
 
     if (Object.keys(updates).length === 0) {
       return jsonOk({ updated: false });
@@ -51,6 +51,7 @@ export async function POST(req: NextRequest) {
 
     await db.update(users).set(updates).where(eq(users.uid, user.uid));
     return jsonOk({ updated: true });
+
   });
 }
 

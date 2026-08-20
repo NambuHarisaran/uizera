@@ -15,21 +15,34 @@ import { certDayUpsertSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
 
-const bodySchema = z.object({
-  days: z.array(certDayUpsertSchema).min(1).max(30),
-});
+const bodySchema = z.union([
+  z.object({
+    days: z.array(certDayUpsertSchema).min(1).max(30),
+  }),
+  certDayUpsertSchema,
+  z.array(certDayUpsertSchema).min(1).max(30),
+]);
+
+type CertDayInput = z.infer<typeof certDayUpsertSchema>;
 
 /** POST /api/admin/certifications/days — upsert program-day definitions in Cloudflare D1. */
 export async function POST(req: NextRequest) {
   return handleApi(async () => {
     assertSameOrigin(req);
     const admin = await requireAdmin();
-    const { days } = await parseBody(req, bodySchema);
+    const parsed = await parseBody(req, bodySchema);
+    const rawList: (z.input<typeof certDayUpsertSchema>)[] = Array.isArray(parsed)
+      ? parsed
+      : "days" in parsed && Array.isArray(parsed.days)
+      ? parsed.days
+      : [parsed as any];
 
     const now = Date.now();
 
-    for (const d of days) {
-      const dayId = `day_${d.day}`;
+    for (const d of rawList) {
+      const dayId = `day-${String(d.day).padStart(2, "0")}`;
+
+
       const existing = await db.query.certProgram.findFirst({
         where: eq(certProgram.dayId, dayId),
       });
@@ -57,8 +70,6 @@ export async function POST(req: NextRequest) {
           createdAt: now,
         });
       }
-
-
     }
 
     await audit({
@@ -66,10 +77,11 @@ export async function POST(req: NextRequest) {
       actorEmail: admin.email,
       action: "cert.days.upsert",
       target: "certProgram",
-      details: { count: days.length },
+      details: { count: rawList.length },
     });
 
-    return jsonOk({ upserted: days.length });
+    return jsonOk({ upserted: rawList.length });
   });
 }
+
 

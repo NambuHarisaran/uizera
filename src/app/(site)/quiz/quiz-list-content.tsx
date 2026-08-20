@@ -105,24 +105,25 @@ function QuizCard({ quiz }: { quiz: Quiz }) {
 
         {isPlayable && (
           <div className="mt-5 flex flex-col gap-2">
-            <Button asChild className="gap-2 bg-brand-500 hover:bg-brand-600">
-              <Link href={`/quiz/${quiz.id}`}>
-                <Zap className="h-4 w-4" /> Take Standard Quiz
-              </Link>
-            </Button>
-            {quiz.status === "live" && (
+            {quiz.mode !== "live" ? (
+              <Button asChild className="gap-2 bg-brand-500 hover:bg-brand-600">
+                <Link href={`/quiz/${quiz.id}`}>
+                  <Zap className="h-4 w-4" /> Take Standard Quiz
+                </Link>
+              </Button>
+            ) : (
               <Button
                 asChild
-                variant="outline"
-                className="gap-2 border-uipath-orange text-uipath-orange hover:bg-uipath-orange/10 font-bold"
+                className="gap-2 bg-uipath-orange hover:bg-uipath-orange/90 text-white font-bold"
               >
                 <Link href={`/quiz/${quiz.id}/live`}>
-                  <Radio className="h-4 w-4 animate-pulse text-uipath-orange" /> Join Live Stage Quiz
+                  <Radio className="h-4 w-4 animate-pulse" /> Join Live Stage Quiz
                 </Link>
               </Button>
             )}
           </div>
         )}
+
         {quiz.status === "closed" && (
           <Button asChild variant="outline" className="mt-5 gap-2">
             <Link href={`/quiz/${quiz.id}`}>

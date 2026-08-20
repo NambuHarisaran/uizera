@@ -52,6 +52,7 @@ export async function POST(
     });
 
     const now = Date.now();
+    const liveQuestionDuration = (quizData.settings as any)?.liveQuestionDurationSeconds ?? 30;
 
     if (action === "start") {
       await db.update(quizzes).set({ status: "live", mode: "live", updatedAt: now }).where(eq(quizzes.id, quizId));
@@ -63,7 +64,7 @@ export async function POST(
             viewState: "question",
             currentQuestionIndex: 0,
             questionStartAtMs: now,
-            questionDurationSeconds: quizData.durationSeconds || 30,
+            questionDurationSeconds: liveQuestionDuration,
             revealAnswer: false,
             updatedAt: now,
           })
@@ -76,11 +77,12 @@ export async function POST(
           viewState: "question",
           currentQuestionIndex: 0,
           questionStartAtMs: now,
-          questionDurationSeconds: quizData.durationSeconds || 30,
+          questionDurationSeconds: liveQuestionDuration,
           revealAnswer: false,
           updatedAt: now,
         });
       }
+
     } else if (action === "setQuestion") {
       const idx = questionIndex ?? 0;
       await db

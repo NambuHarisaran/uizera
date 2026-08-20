@@ -159,8 +159,9 @@ export function Navbar() {
             <>
               <div className="flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-600 dark:text-amber-400 sm:px-3 sm:py-1.5 sm:text-sm">
                 <Coins className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-500" />
-                {formatCoins(user.coins)}
+                {formatCoins(user.coins ?? 0)}
               </div>
+
               <DropdownMenu>
                 <DropdownMenuTrigger
                   aria-label="Open user menu"
@@ -241,11 +242,14 @@ export function Navbar() {
                     <p className="truncate font-bold text-foreground" title={user.displayName}>
                       {user.displayName}
                     </p>
-                    <p className="truncate text-muted-foreground">Level {user.level} ({rankStyleForLevel(user.level).title}) · {formatCoins(user.xp)} XP</p>
+                    <p className="truncate text-muted-foreground">
+                      Level {user.level ?? 1} ({rankStyleForLevel(user.level ?? 1).title}) · {formatCoins(user.xp ?? 0)} XP
+                    </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1 font-bold text-amber-500">
-                    <Coins className="h-4 w-4" /> {formatCoins(user.coins)}
+                    <Coins className="h-4 w-4" /> {formatCoins(user.coins ?? 0)}
                   </div>
+
                 </div>
               )}
 

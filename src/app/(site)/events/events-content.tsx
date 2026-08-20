@@ -67,12 +67,13 @@ function EventCard({ event }: { event: CommunityEvent }) {
               {event.venue}
             </div>
           )}
-          {event.speakers.length > 0 && (
+          {Array.isArray(event.speakers) && event.speakers.length > 0 && (
             <div className="flex items-center gap-2">
               <Mic className="h-4 w-4 text-brand-500" />
               {event.speakers.join(", ")}
             </div>
           )}
+
         </div>
 
         {event.registrationLink && !isPast && (

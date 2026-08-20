@@ -171,7 +171,7 @@ export default function AdminUsersPage() {
                             </Badge>
                           ) : (
                             <Select
-                              disabled={isSelf || isBusy}
+                              disabled={currentUser?.role !== "super_admin" || isSelf || isBusy}
                               value={u.role}
                               onValueChange={(val) => handleRoleChange(u.uid, val as Role)}
                             >
@@ -196,7 +196,7 @@ export default function AdminUsersPage() {
                         </TableCell>
 
                         <TableCell className="text-right">
-                          {!isSelf && !isSuperAdmin && (
+                          {!isSelf && !isSuperAdmin && currentUser?.role === "super_admin" && (
                             <Button
                               variant="ghost"
                               size="sm"
@@ -216,6 +216,7 @@ export default function AdminUsersPage() {
                             </Button>
                           )}
                         </TableCell>
+
                       </TableRow>
                     );
                   })}

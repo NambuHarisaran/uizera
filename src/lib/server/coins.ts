@@ -99,7 +99,8 @@ export async function bumpStats(
  */
 export async function awardCoins(opts: AwardOptions): Promise<AwardResult> {
   const amount = Math.trunc(opts.amount);
-  if (!Number.isFinite(amount) || amount === 0) {
+  const xpGain = opts.xpAmount !== undefined ? Math.max(0, opts.xpAmount) : Math.max(0, amount);
+  if (!Number.isFinite(amount) || (amount === 0 && xpGain === 0 && !opts.counters)) {
     throw new ApiError(400, "Invalid coin amount.");
   }
   if (Math.abs(amount) > 10_000) {
@@ -112,15 +113,16 @@ export async function awardCoins(opts: AwardOptions): Promise<AwardResult> {
   const user = await db.query.users.findFirst({
     where: eq(users.uid, opts.uid),
   });
+
   if (!user) throw new ApiError(404, "User not found.");
   if (user.disabled) throw new ApiError(400, "This account is disabled.");
 
   const coins = Math.max(0, (user.coins ?? 0) + amount);
   const weeklyCoins = Math.max(0, (user.weeklyCoins ?? 0) + amount);
   const monthlyCoins = Math.max(0, (user.monthlyCoins ?? 0) + amount);
-  const xpGain = opts.xpAmount !== undefined ? Math.max(0, opts.xpAmount) : Math.max(0, amount);
   const xp = (user.xp ?? 0) + xpGain;
   const level = levelForXp(xp);
+
 
   const counters = {
     quizzesTaken: (user.quizzesTaken ?? 0) + (opts.counters?.quizzesTaken ?? 0),
@@ -161,19 +163,22 @@ export async function awardCoins(opts: AwardOptions): Promise<AwardResult> {
     })
     .where(eq(users.uid, opts.uid));
 
-  // Insert transaction entry in D1
-  await db.insert(coinTransactions).values({
-    id: txId,
-    uid: opts.uid,
-    displayName: user.displayName ?? "Member",
-    amount,
-    source: opts.source,
-    reason: opts.reason.slice(0, 500),
-    refId: opts.refId ?? null,
-    awardedBy: opts.awardedBy,
-    createdAt: now,
-  });
+  // Insert transaction entry in D1 if coins changed
+  if (amount !== 0) {
+    await db.insert(coinTransactions).values({
+      id: txId,
+      uid: opts.uid,
+      displayName: user.displayName ?? "Member",
+      amount,
+      source: opts.source,
+      reason: opts.reason.slice(0, 500),
+      refId: opts.refId ?? null,
+      awardedBy: opts.awardedBy,
+      createdAt: now,
+    });
+  }
 
   return { newBalance: coins, newBadges };
+
 }
 

@@ -1,7 +1,8 @@
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { certProgram, certProgress } from "@/lib/db/schema";
-import { handleApi, jsonOk, requireUser } from "@/lib/server/api";
+import { getSessionUser } from "@/lib/auth/session";
+import { handleApi, jsonOk } from "@/lib/server/api";
 
 export const runtime = "nodejs";
 
@@ -10,16 +11,18 @@ export const runtime = "nodejs";
  */
 export async function GET() {
   return handleApi(async () => {
-    const user = await requireUser();
+    const user = await getSessionUser();
 
     const [daysRows, progressRows] = await Promise.all([
       db.query.certProgram.findMany({
         orderBy: [asc(certProgram.dayNumber)],
         limit: 30,
       }),
-      db.query.certProgress.findMany({
-        where: eq(certProgress.uid, user.uid),
-      }),
+      user
+        ? db.query.certProgress.findMany({
+            where: eq(certProgress.uid, user.uid),
+          })
+        : Promise.resolve([]),
     ]);
 
     const progressMap: Record<string, { status: string; completed: boolean; completedAt: number | null }> = {};
@@ -38,16 +41,20 @@ export async function GET() {
         title: d.title,
         certName: d.title,
         description: d.description,
+        link: d.resourceUrl || d.videoUrl || "#",
         videoUrl: d.videoUrl,
         resourceUrl: d.resourceUrl,
         xp: d.xp,
         coins: d.coins,
       })),
-      progress: {
-        uid: user.uid,
-        days: progressMap,
-      },
+      progress: user
+        ? {
+            uid: user.uid,
+            days: progressMap,
+          }
+        : null,
     });
   });
 }
+
 

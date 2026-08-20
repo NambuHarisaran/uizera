@@ -220,6 +220,21 @@ export function useAdminChallenges() {
   });
 }
 
+export function useAdminSubmissions(challengeId?: string) {
+  return useQuery({
+    queryKey: queryKeys.adminSubmissions(challengeId),
+    queryFn: () => {
+      const url = challengeId
+        ? `/api/admin/submissions?challengeId=${encodeURIComponent(challengeId)}`
+        : "/api/admin/submissions";
+      return fetcher<{ submissions: ChallengeSubmission[] }>(url);
+    },
+    enabled: challengeId !== undefined ? Boolean(challengeId) : true,
+    staleTime: 15_000,
+  });
+}
+
+
 // ── Achievements & Quests ───────────────────────────────────────────────────
 
 export function useAchievements() {

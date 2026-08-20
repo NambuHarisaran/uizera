@@ -109,13 +109,18 @@ export async function getQuizQuestions(
 }
 
 export async function getAnswerKey(
-
   quizId: string
 ): Promise<Record<string, AnswerKeyEntry>> {
-  const rows = await db.query.quizAnswerKeys.findMany({
-    where: eq(quizAnswerKeys.quizId, quizId),
-  });
+  const [rows, questionRows] = await Promise.all([
+    db.query.quizAnswerKeys.findMany({
+      where: eq(quizAnswerKeys.quizId, quizId),
+    }),
+    db.query.quizQuestions.findMany({
+      where: eq(quizQuestions.quizId, quizId),
+    }),
+  ]);
 
+  const qMap = new Map(questionRows.map((q) => [q.id, q]));
   const map: Record<string, AnswerKeyEntry> = {};
   for (const r of rows) {
     let parsedCorrect: number[] = [];
@@ -124,14 +129,16 @@ export async function getAnswerKey(
     } catch {
       parsedCorrect = [];
     }
+    const q = qMap.get(r.questionId);
     map[r.questionId] = {
       correct: parsedCorrect,
       explanation: r.explanation ?? null,
-      points: 10,
+      points: q?.points ?? 10,
     };
   }
   return map;
 }
+
 
 /** A quiz is playable inside its window while scheduled/live. */
 export function assertQuizOpen(quiz: Quiz, now: number): void {

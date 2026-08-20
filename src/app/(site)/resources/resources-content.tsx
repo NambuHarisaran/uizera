@@ -49,11 +49,12 @@ export function ResourcesContent() {
       return (
         r.title.toLowerCase().includes(q) ||
         r.description.toLowerCase().includes(q) ||
-        r.tags.some((t) => t.toLowerCase().includes(q))
+        (r.tags ?? []).some((t) => t.toLowerCase().includes(q))
       );
     }
     return true;
   });
+
 
   return (
     <div className="pb-24">
@@ -149,7 +150,7 @@ export function ResourcesContent() {
                 <p className="mb-3 flex-1 text-xs leading-relaxed text-muted-foreground line-clamp-2">
                   {r.description}
                 </p>
-                {r.tags.length > 0 && (
+                {Array.isArray(r.tags) && r.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1">
                     {r.tags.slice(0, 3).map((tag) => (
                       <span
@@ -162,6 +163,7 @@ export function ResourcesContent() {
                     ))}
                   </div>
                 )}
+
               </motion.a>
             ))}
           </div>

@@ -17,6 +17,7 @@ import {
   type User as FirebaseUser,
 } from "firebase/auth";
 import { clientAuth, googleProvider } from "@/lib/firebase/client";
+import { useQueryClient } from "@tanstack/react-query";
 import type { AppUser } from "@/types";
 
 interface AuthContextValue {
@@ -29,6 +30,7 @@ interface AuthContextValue {
   isHost: boolean;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -64,6 +66,7 @@ function fallbackProfile(fb: FirebaseUser): AppUser {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -114,6 +117,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, [syncSessionWithD1]);
 
+  const refreshUser = useCallback(async () => {
+    try {
+      const res = await fetch("/api/profile");
+      const body = (await res.json().catch(() => null)) as
+        | { ok: boolean; data?: { user?: AppUser } }
+        | null;
+      if (body?.ok && body.data?.user) {
+        setUser(body.data.user);
+      }
+    } catch (err) {
+      console.error("Failed to refresh user:", err);
+    }
+  }, []);
+
   useEffect(() => {
     return onAuthStateChanged(clientAuth(), (fbUser) => {
       setFirebaseUser(fbUser);
@@ -144,6 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error("Google sign-in error:", err);
       setLoading(false);
+      throw err;
     }
   }, [router, syncSessionWithD1]);
 
@@ -151,13 +169,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     await fetch("/api/auth/session", { method: "DELETE" }).catch(() => {});
     await firebaseSignOut(clientAuth()).catch(() => {});
+    queryClient.clear();
     setUser(null);
     setFirebaseUser(null);
     setLoading(false);
     router.push("/");
     router.refresh();
-  }, [router]);
-
+  }, [queryClient, router]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -168,11 +186,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isHost: user?.role === "quiz_host" || user?.role === "admin" || user?.role === "super_admin",
       signInWithGoogle,
       signOut,
+      refreshUser,
     }),
-    [firebaseUser, user, loading, signInWithGoogle, signOut]
+    [firebaseUser, user, loading, signInWithGoogle, signOut, refreshUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+
+
 }
 
 export function useAuth(): AuthContextValue {

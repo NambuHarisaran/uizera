@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+
 import {
   Award,
   Coins,
@@ -44,7 +45,7 @@ const statCards = [
 ] as const;
 
 export function ProfileContent() {
-  const { user, loading } = useAuth();
+  const { user, loading, refreshUser } = useAuth();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -66,6 +67,18 @@ export function ProfileContent() {
     },
   });
 
+  useEffect(() => {
+    if (user) {
+      reset({
+        displayName: user.displayName ?? "",
+        department: (user.department as any) ?? undefined,
+        year: (user.year as any) ?? undefined,
+        regNo: user.regNo ?? undefined,
+        bio: user.bio ?? undefined,
+      });
+    }
+  }, [user, reset]);
+
   const onSubmit = async (data: ProfileForm) => {
     setSaving(true);
     try {
@@ -75,6 +88,7 @@ export function ProfileContent() {
         body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error("Failed to update profile.");
+      await refreshUser();
       toast.success("Profile updated!");
       setEditing(false);
     } catch (err) {
@@ -83,6 +97,7 @@ export function ProfileContent() {
       setSaving(false);
     }
   };
+
 
   if (loading || !user) {
     return (

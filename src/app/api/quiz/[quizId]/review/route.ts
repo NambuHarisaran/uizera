@@ -13,9 +13,12 @@ import {
   getAnswerKey,
   getQuizOrThrow,
   getQuizQuestions,
+  gradeQuestion,
 } from "@/lib/server/quiz";
+import type { QuestionType } from "@/types";
 
 export const runtime = "nodejs";
+
 
 /**
  * GET /api/quiz/[quizId]/review?attempt=<attemptId>
@@ -81,18 +84,21 @@ export async function GET(
         .filter((i) => i >= 0);
       const selectedDisplay = parsedAnswers[q.id] ?? [];
 
-      const exact =
-        correctDisplay.length === selectedDisplay.length &&
-        correctDisplay.every((c: number) => selectedDisplay.includes(c));
+      const questionType: QuestionType = (key?.correct.length ?? 0) > 1 ? "multi_select" : q.type;
+      const originalSelected = selectedDisplay
+        .map((d: number) => order[d])
+        .filter((v: number): v is number => typeof v === "number");
+      const earned = gradeQuestion(questionType, originalSelected, key?.correct ?? [], key?.points ?? 0);
 
       return {
         question: q,
         selected: selectedDisplay,
         correct: correctDisplay,
         explanation: key?.explanation ?? null,
-        earned: exact ? (key?.points ?? 0) : 0,
+        earned,
       };
     });
+
 
     return jsonOk({
       attempt: {

@@ -83,7 +83,7 @@ export async function POST(
       try {
         const award = await awardCoins({
           uid: submission.uid,
-          amount: Math.max(1, coins),
+          amount: coins,
           xpAmount: xp,
           source: "weekly_task",
           reason: `Challenge approved: ${submission.challengeTitle}`,
@@ -96,7 +96,7 @@ export async function POST(
         console.error("[review] award failed, reverting approval:", err);
         await db
           .update(challengeSubmissions)
-          .set({ status: "pending", reviewedBy: null })
+          .set({ status: "pending", reviewedBy: null, coinsAwarded: 0 })
           .where(eq(challengeSubmissions.id, submissionId));
         throw new ApiError(500, "Could not award coins — review was not saved.");
       }

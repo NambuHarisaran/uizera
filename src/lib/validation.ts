@@ -142,8 +142,8 @@ export const challengeSubmitSchema = z
   .object({
     challengeId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
     filePath: z.string().max(512).nullable().optional(),
-    fileUrl: z.string().url().max(2048).nullable().optional(),
-    link: z.string().url().max(1024).nullable().optional(),
+    fileUrl: z.string().url().regex(/^https?:\/\//i, "Must be an http or https URL").max(2048).nullable().optional(),
+    link: z.string().url().regex(/^https?:\/\//i, "Must be an http or https URL").max(1024).nullable().optional(),
     notes: z.string().max(3000).nullable().optional(),
   })
   .refine((d) => d.filePath || d.link, {
@@ -282,11 +282,13 @@ export const profileUpdateSchema = z.object({
   year: z.enum(YEARS).nullable().optional(),
   regNo: z
     .string()
-    .regex(/^[A-Za-z0-9/-]{4,24}$/)
+    .regex(/^[A-Za-z0-9/-]{4,24}$/, "Invalid registration number format")
+    .or(z.literal(""))
     .nullable()
     .optional(),
   bio: z.string().max(500).nullable().optional(),
 });
+
 
 export const contactSchema = z.object({
   name: z.string().min(2).max(120),

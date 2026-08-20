@@ -1,22 +1,34 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Linkedin, Mail, Trophy, Users } from "lucide-react";
+import {
+  Award,
+  Crown,
+  GraduationCap,
+  Linkedin,
+  Mail,
+  Sparkles,
+  Trophy,
+  UserCheck,
+  Users,
+} from "lucide-react";
 import { SectionHeading } from "@/components/shared/section-heading";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/shared/spinner";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useTeam } from "@/lib/hooks";
 import { initials } from "@/lib/utils";
 import type { TeamMember, TeamSection } from "@/types";
 
-const sectionOrder: { key: TeamSection; label: string }[] = [
-  { key: "faculty", label: "Faculty In-Charge" },
-  { key: "hod", label: "Head of Department" },
-  { key: "sdc", label: "Student Developer Champion (2025-26)" },
-  { key: "core", label: "Core Team" },
-  { key: "coordinators", label: "Student Coordinators" },
-  { key: "members", label: "Community Members" },
+const sectionOrder: { key: TeamSection; label: string; icon: typeof Users }[] = [
+  { key: "faculty", label: "Faculty In-Charge", icon: GraduationCap },
+  { key: "hod", label: "Head of Department", icon: Award },
+  { key: "sdc", label: "Student Developer Champion (2025-26)", icon: Crown },
+  { key: "core", label: "Core Team", icon: Sparkles },
+  { key: "coordinators", label: "Student Coordinators", icon: UserCheck },
+  { key: "members", label: "Community Members", icon: Users },
 ];
 
 /** Display order for role categories inside the core team. Unknown roles go last. */
@@ -29,6 +41,16 @@ const ROLE_ORDER = [
   "Graphical Designer",
   "Event Manager",
 ];
+
+const ROLE_COLORS: Record<string, string> = {
+  "Technical Team": "bg-blue-500/10 text-blue-500 border-blue-500/20",
+  Cinematography: "bg-rose-500/10 text-rose-500 border-rose-500/20",
+  "Social Media": "bg-pink-500/10 text-pink-500 border-pink-500/20",
+  "Content Creator": "bg-purple-500/10 text-purple-400 border-purple-500/20",
+  PRO: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
+  "Graphical Designer": "bg-amber-500/10 text-amber-500 border-amber-500/20",
+  "Event Manager": "bg-violet-500/10 text-violet-500 border-violet-500/20",
+};
 
 function groupByRole(members: TeamMember[]): [string, TeamMember[]][] {
   const map = new Map<string, TeamMember[]>();
@@ -53,52 +75,67 @@ function MemberCard({ member, highlight = false }: { member: TeamMember; highlig
       transition={{ duration: 0.4 }}
       className={
         highlight
-          ? "group relative mx-auto flex w-full max-w-sm flex-col items-center border-2 border-uipath-gold bg-card p-8 text-center shadow-lg transition-all duration-300 hover:shadow-xl"
-          : "group flex flex-col items-center rounded-2xl border bg-card p-6 text-center transition-all duration-300 hover:border-brand-500/30 hover:shadow-lg hover:shadow-brand-500/5"
+          ? "group relative mx-auto flex w-full max-w-md flex-col items-center rounded-3xl border-2 border-amber-500/80 bg-gradient-to-b from-amber-500/15 via-card to-card p-8 text-center shadow-2xl shadow-amber-500/20 transition-all duration-300 hover:scale-[1.02]"
+          : "group flex flex-col items-center rounded-2xl border bg-card p-6 text-center transition-all duration-300 hover:border-brand-500/40 hover:shadow-lg hover:shadow-brand-500/5 justify-between"
       }
     >
       {highlight && (
-        <span className="absolute -top-4 flex items-center gap-1.5 bg-uipath-gold px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-wider text-black">
-          <Trophy className="h-3.5 w-3.5" />
-          Champion
+        <span className="absolute -top-4 flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-1 font-mono text-xs font-black uppercase tracking-wider text-black shadow-md">
+          <Crown className="h-3.5 w-3.5" />
+          SDC Lead Champion
         </span>
       )}
-      <Avatar
-        className={
-          highlight
-            ? "mb-4 h-24 w-24 border-2 border-uipath-gold/60"
-            : "mb-4 h-20 w-20 border-2 border-brand-500/20 transition-all duration-300 group-hover:border-brand-500/40 group-hover:shadow-lg group-hover:shadow-brand-500/10"
-        }
-      >
-        <AvatarImage src={member.photo ?? undefined} alt={member.name} />
-        <AvatarFallback className="bg-uipath-orange/15 font-display text-lg text-uipath-orange">
-          {initials(member.name)}
-        </AvatarFallback>
-      </Avatar>
 
-      <h3 className="w-full truncate font-display text-base font-semibold" title={member.name}>
-        {member.name}
-      </h3>
-      <p className="mt-0.5 w-full truncate text-sm text-brand-500" title={member.role}>
-        {member.role}
-      </p>
-      {member.department && (
-        <p className="mt-0.5 w-full truncate text-xs text-muted-foreground">{member.department}</p>
-      )}
-      {member.bio && (
-        <p className="mt-3 line-clamp-3 text-xs leading-relaxed text-muted-foreground">
-          {member.bio}
-        </p>
-      )}
+      <div className="flex flex-col items-center w-full">
+        <div className="relative mb-4">
+          <Avatar
+            className={
+              highlight
+                ? "h-28 w-28 border-4 border-amber-400 ring-4 ring-amber-500/30 shadow-xl"
+                : "h-20 w-20 border-2 border-brand-500/20 transition-all duration-300 group-hover:border-brand-500/50 group-hover:shadow-md"
+            }
+          >
+            <AvatarImage src={member.photo ?? undefined} alt={member.name} />
+            <AvatarFallback className="bg-uipath-orange/15 font-display text-xl text-uipath-orange font-bold">
+              {initials(member.name)}
+            </AvatarFallback>
+          </Avatar>
+        </div>
 
-      <div className="mt-4 flex gap-2">
+        <h3 className="w-full truncate font-display text-base sm:text-lg font-bold text-foreground" title={member.name}>
+          {member.name}
+        </h3>
+
+        <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1">
+          <span
+            className={`inline-block rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${
+              ROLE_COLORS[member.role] || "bg-brand-500/10 text-brand-500 border-brand-500/20"
+            }`}
+          >
+            {member.role}
+          </span>
+        </div>
+
+        {member.department && (
+          <p className="mt-1 w-full truncate text-xs text-muted-foreground font-medium">{member.department}</p>
+        )}
+
+        {member.bio && (
+          <p className="mt-3 line-clamp-3 text-xs leading-relaxed text-muted-foreground">
+            {member.bio}
+          </p>
+        )}
+      </div>
+
+      <div className="mt-5 flex gap-2">
         {member.linkedin && (
           <a
             href={member.linkedin}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-lg border p-2 text-muted-foreground transition-colors hover:border-brand-500/50 hover:text-brand-500"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border p-2 text-muted-foreground transition-all hover:border-brand-500/50 hover:text-brand-500 hover:bg-brand-500/5"
             aria-label={`${member.name} LinkedIn`}
+            title="LinkedIn Profile"
           >
             <Linkedin className="h-4 w-4" />
           </a>
@@ -106,8 +143,9 @@ function MemberCard({ member, highlight = false }: { member: TeamMember; highlig
         {member.email && (
           <a
             href={`mailto:${member.email}`}
-            className="rounded-lg border p-2 text-muted-foreground transition-colors hover:border-brand-500/50 hover:text-brand-500"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border p-2 text-muted-foreground transition-all hover:border-brand-500/50 hover:text-brand-500 hover:bg-brand-500/5"
             aria-label={`Email ${member.name}`}
+            title="Send Email"
           >
             <Mail className="h-4 w-4" />
           </a>
@@ -132,27 +170,34 @@ export function TeamContent() {
     }
   }
 
+  const scrollToSection = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   return (
     <div className="pb-24">
       {/* Hero */}
-      <section className="hero-glow relative overflow-hidden py-24">
+      <section className="hero-glow relative overflow-hidden py-20 border-b">
         <div className="bg-grid pointer-events-none absolute inset-0 opacity-20" />
         <div className="container relative">
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
+            initial={{ opacity: 0, y: 25 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
+            transition={{ duration: 0.5 }}
             className="mx-auto max-w-3xl text-center"
           >
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-brand-500/30 bg-brand-500/10 px-4 py-1.5 text-sm font-medium text-brand-600 dark:text-brand-400">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-brand-500/30 bg-brand-500/10 px-4 py-1.5 text-sm font-semibold text-brand-600 dark:text-brand-400">
               <Users className="h-4 w-4" />
-              Our Team
+              Community Leadership
             </div>
-            <h1 className="font-display text-4xl font-bold sm:text-5xl">
+            <h1 className="font-display text-4xl font-extrabold sm:text-5xl tracking-tight">
               The People Behind <span className="text-gradient">UiZera</span>
             </h1>
-            <p className="mt-4 text-lg text-muted-foreground">
-              Meet the faculty, coordinators, and core members who make this community thrive.
+            <p className="mt-3 text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto">
+              Meet our faculty patrons, student developer champion, core team members, and student coordinators driving RPA innovation at PSNA CET.
             </p>
           </motion.div>
         </div>
@@ -160,33 +205,60 @@ export function TeamContent() {
 
       {isLoading ? (
         <div className="flex items-center justify-center py-24">
-          <Spinner className="h-8 w-8" />
+          <Spinner className="h-10 w-10 text-brand-500" />
         </div>
       ) : (
-        <div className="container space-y-20 py-16">
-          {sectionOrder.map(({ key, label }) => {
+        <div className="container space-y-20 py-12 max-w-6xl">
+          {/* Quick Jump Bar */}
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {sectionOrder.map(({ key, label }) => {
+              const members = grouped.get(key) ?? [];
+              if (members.length === 0) return null;
+              return (
+                <Button
+                  key={key}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => scrollToSection(key)}
+                  className="text-xs rounded-xl"
+                >
+                  {label} ({members.length})
+                </Button>
+              );
+            })}
+          </div>
+
+          {sectionOrder.map(({ key, label, icon: Icon }) => {
             const members = grouped.get(key) ?? [];
             if (members.length === 0) return null;
+
             if (key === "core") {
               return (
-                <section key={key}>
-                  <SectionHeading title={label} />
-                  <div className="mt-10 space-y-14">
+                <section key={key} id={key} className="space-y-10 scroll-mt-24">
+                  <div className="flex items-center justify-between border-b pb-4">
+                    <SectionHeading title={label} />
+                    <Badge variant="outline" className="font-mono text-xs text-brand-500">
+                      {members.length} Members
+                    </Badge>
+                  </div>
+
+                  <div className="space-y-12">
                     {groupByRole(members).map(([role, roleMembers]) => (
-                      <div key={role}>
-                        <div className="mb-6 flex items-center gap-3">
-                          <span className="h-3 w-3 bg-uipath-orange" />
-                          <h3 className="font-display text-xl font-bold">{role}</h3>
+                      <div key={role} className="space-y-4">
+                        <div className="flex items-center gap-3">
+                          <span className="h-2.5 w-2.5 rounded-full bg-brand-500" />
+                          <h3 className="font-display text-lg font-bold text-foreground">{role}</h3>
                           <span className="font-mono text-xs font-semibold text-muted-foreground">
-                            {String(roleMembers.length).padStart(2, "0")}
+                            ({String(roleMembers.length).padStart(2, "0")})
                           </span>
                           <span className="h-px flex-1 bg-border" />
                         </div>
                         <div
-                          className={`grid gap-6 ${roleMembers.length <= 2
+                          className={`grid gap-5 ${
+                            roleMembers.length <= 2
                               ? "sm:grid-cols-2 lg:grid-cols-3"
                               : "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-                            }`}
+                          }`}
                         >
                           {roleMembers.map((m) => (
                             <MemberCard key={m.id} member={m} />
@@ -200,15 +272,22 @@ export function TeamContent() {
             }
 
             return (
-              <section key={key}>
-                <SectionHeading title={label} />
+              <section key={key} id={key} className="space-y-8 scroll-mt-24">
+                <div className="flex items-center justify-between border-b pb-4">
+                  <SectionHeading title={label} />
+                  <Badge variant="outline" className="font-mono text-xs text-brand-500">
+                    {members.length} {members.length === 1 ? "Leader" : "Leaders"}
+                  </Badge>
+                </div>
+
                 <div
-                  className={`mt-10 grid gap-6 ${key === "sdc"
-                      ? "mx-auto max-w-sm"
+                  className={`grid gap-6 ${
+                    key === "sdc"
+                      ? "mx-auto max-w-md"
                       : members.length <= 2
-                        ? "mx-auto max-w-xl sm:grid-cols-2"
-                        : "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-                    }`}
+                      ? "mx-auto max-w-xl sm:grid-cols-2"
+                      : "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                  }`}
                 >
                   {members.map((m) => (
                     <MemberCard key={m.id} member={m} highlight={key === "sdc"} />
@@ -221,8 +300,8 @@ export function TeamContent() {
           {(!data?.items || data.items.length === 0) && (
             <EmptyState
               icon={Users}
-              title="No team members yet"
-              description="Team members will appear here once added by an admin."
+              title="No team members listed yet"
+              description="Team member profiles will appear here once added by community administrators."
             />
           )}
         </div>
@@ -230,3 +309,4 @@ export function TeamContent() {
     </div>
   );
 }
+

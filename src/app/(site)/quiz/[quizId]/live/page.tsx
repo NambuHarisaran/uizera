@@ -202,6 +202,50 @@ export default function ParticipantLiveQuizPage({
     }
   };
 
+  // Keyboard shortcut listener (1-4, A-D) during active live question
+  useEffect(() => {
+    if (
+      !currentQ ||
+      Boolean(myAnswerForCurrent) ||
+      isRevealed ||
+      submittingQ ||
+      isKicked ||
+      isWaiting ||
+      isLeaderboard ||
+      isEnded
+    )
+      return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (["INPUT", "TEXTAREA"].includes((e.target as HTMLElement)?.tagName)) return;
+      const key = e.key.toLowerCase();
+      let optIdx: number | null = null;
+      if (key === "1" || key === "a") optIdx = 0;
+      else if (key === "2" || key === "b") optIdx = 1;
+      else if (key === "3" || key === "c") optIdx = 2;
+      else if (key === "4" || key === "d") optIdx = 3;
+      else if (key === "5" || key === "e") optIdx = 4;
+      else if (key === "6" || key === "f") optIdx = 5;
+
+      if (optIdx !== null && currentQ.options && optIdx < currentQ.options.length) {
+        e.preventDefault();
+        void handleSelect(currentQ.id, optIdx);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    currentQ,
+    myAnswerForCurrent,
+    isRevealed,
+    submittingQ,
+    isKicked,
+    isWaiting,
+    isLeaderboard,
+    isEnded,
+    currentQIndex,
+  ]);
 
   const handleGoogleLogin = async () => {
     setSigningIn(true);

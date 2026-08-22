@@ -75,8 +75,14 @@ CRITICAL RULES:
   ]
 }`;
 
-    // Try primary models: gemini-2.0-flash, gemini-1.5-flash, gemini-1.5-pro
-    const models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"];
+    // Try primary models: gemini-2.5-flash (latest free tier), gemini-2.5-flash-lite, gemini-2.0-flash, gemini-1.5-flash, gemini-1.5-pro
+    const models = [
+      "gemini-2.5-flash",
+      "gemini-2.5-flash-lite",
+      "gemini-2.0-flash",
+      "gemini-1.5-flash",
+      "gemini-1.5-pro",
+    ];
     let lastError: string | null = null;
     let rawText = "";
 

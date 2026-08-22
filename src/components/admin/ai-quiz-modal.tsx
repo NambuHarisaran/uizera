@@ -313,7 +313,7 @@ export function AIQuizModal({
           {/* Action Button */}
           <div className="flex items-center justify-between gap-3 pt-1">
             <span className="text-xs text-muted-foreground">
-              Powered by Google Gemini Flash
+              Powered by Google Gemini 2.5 Flash
             </span>
 
             <Button

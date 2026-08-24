@@ -21,7 +21,8 @@ import type { GalleryItem } from "@/types";
 
 export function GalleryContent() {
   const { data, isLoading } = useGallery();
-  const items = (data?.items ?? []) as GalleryItem[];
+  const rawItems = data?.items;
+  const items = useMemo(() => (rawItems ?? []) as GalleryItem[], [rawItems]);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
@@ -139,6 +140,7 @@ export function GalleryContent() {
                 className="group relative mb-4 cursor-pointer overflow-hidden rounded-2xl border bg-card transition-all duration-300 hover:border-brand-500/50 hover:shadow-xl hover:shadow-brand-500/10"
               >
                 <div className="overflow-hidden bg-muted">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={item.image}
                     alt={item.caption || "Gallery photo"}
@@ -236,6 +238,7 @@ export function GalleryContent() {
 
               {/* Image Frame */}
               <div className="overflow-hidden rounded-2xl border border-white/10 shadow-2xl bg-black">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={selected.image}
                   alt={selected.caption || "Gallery photo"}

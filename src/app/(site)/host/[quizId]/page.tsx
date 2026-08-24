@@ -94,15 +94,46 @@ export default function HostLiveQuizStagePage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quizId]);
 
-  // Real-time polling against Cloudflare D1 (750ms)
+  // Adaptive real-time polling for host presenter view
   useEffect(() => {
     if (!user) return;
-    const interval = setInterval(() => {
-      void loadData();
-    }, 750);
-    return () => clearInterval(interval);
+    let timer: NodeJS.Timeout;
+
+    const scheduleNextPoll = () => {
+      let delay = 900;
+      if (document.hidden) {
+        delay = 4000;
+      } else if (session?.status === "ended") {
+        return;
+      } else if (session?.status === "waiting" || session?.viewState === "lobby") {
+        delay = 2500;
+      } else if (session?.viewState === "leaderboard") {
+        delay = 2000;
+      } else if (session?.revealAnswer) {
+        delay = 1500;
+      }
+
+      timer = setTimeout(async () => {
+        await loadData();
+        scheduleNextPoll();
+      }, delay);
+    };
+
+    scheduleNextPoll();
+
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        void loadData();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quizId, user]);
+  }, [quizId, user, session?.status, session?.viewState, session?.revealAnswer]);
 
 
 
@@ -167,7 +198,7 @@ export default function HostLiveQuizStagePage({
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [session?.questionStartAtMs, session?.questionDurationSeconds, session?.status, session?.currentQuestionIndex]);
+  }, [session]);
 
   // Keyboard remote control shortcuts
   useEffect(() => {

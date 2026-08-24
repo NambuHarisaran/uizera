@@ -174,7 +174,7 @@ export default function AdminLiveQuizStagePage({
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [session?.questionStartAtMs, session?.questionDurationSeconds, session?.status, session?.currentQuestionIndex]);
+  }, [session]);
 
   // Keyboard remote control shortcuts
   useEffect(() => {

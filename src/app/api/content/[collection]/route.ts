@@ -4,6 +4,8 @@ import { db } from "@/lib/db/client";
 import { announcements, communityEvents, learningResources, teamMembers, gallery } from "@/lib/db/schema";
 import { handleApi } from "@/lib/server/api";
 
+import { remember } from "@/lib/server/cache";
+
 export const runtime = "nodejs";
 
 const PUBLIC_COLLECTIONS = new Set([
@@ -23,7 +25,7 @@ const CACHE_TTL: Record<string, string> = {
 };
 
 /**
- * GET /api/content/[collection] — public read from Cloudflare D1.
+ * GET /api/content/[collection] — public read from Cloudflare D1 with in-memory caching.
  */
 export async function GET(
   _req: NextRequest,
@@ -36,75 +38,78 @@ export async function GET(
       return NextResponse.json({ ok: true, data: { items: [] } });
     }
 
-    let items: any[] = [];
+    const items = await remember(`content_${collection}`, 60_000, async () => {
+      let result: any[] = [];
 
-    if (collection === "events") {
-      const rows = await db.query.communityEvents.findMany({
-        where: eq(communityEvents.published, true),
-        orderBy: [desc(communityEvents.date)],
-        limit: 100,
-      });
-      items = rows.map((r) => {
-        let speakers: any = [];
-        try {
-          speakers = JSON.parse(r.speakers ?? "[]");
-        } catch {}
-        return {
+      if (collection === "events") {
+        const rows = await db.query.communityEvents.findMany({
+          where: eq(communityEvents.published, true),
+          orderBy: [desc(communityEvents.date)],
+          limit: 100,
+        });
+        result = rows.map((r) => {
+          let speakers: any = [];
+          try {
+            speakers = JSON.parse(r.speakers ?? "[]");
+          } catch {}
+          return {
+            ...r,
+            speakers,
+            date: new Date(r.date),
+            createdAt: new Date(r.createdAt),
+          };
+        });
+      } else if (collection === "resources") {
+        const rows = await db.query.learningResources.findMany({
+          where: eq(learningResources.published, true),
+          orderBy: [desc(learningResources.createdAt)],
+          limit: 200,
+        });
+        result = rows.map((r) => {
+          let tags: any = [];
+          try {
+            tags = JSON.parse(r.tags ?? "[]");
+          } catch {}
+          return {
+            ...r,
+            tags,
+            createdAt: new Date(r.createdAt),
+          };
+        });
+      } else if (collection === "announcements") {
+        const rows = await db.query.announcements.findMany({
+          where: eq(announcements.published, true),
+          orderBy: [desc(announcements.publishedAt)],
+          limit: 50,
+        });
+        result = rows.map((r) => ({
           ...r,
-          speakers,
-          date: new Date(r.date),
-          createdAt: new Date(r.createdAt),
-        };
-      });
-    } else if (collection === "resources") {
-      const rows = await db.query.learningResources.findMany({
-        where: eq(learningResources.published, true),
-        orderBy: [desc(learningResources.createdAt)],
-        limit: 200,
-      });
-      items = rows.map((r) => {
-        let tags: any = [];
-        try {
-          tags = JSON.parse(r.tags ?? "[]");
-        } catch {}
-        return {
+          publishedAt: r.publishedAt ? new Date(r.publishedAt) : null,
+        }));
+      } else if (collection === "team") {
+        const rows = await db.query.teamMembers.findMany({
+          orderBy: [asc(teamMembers.orderIndex)],
+          limit: 100,
+        });
+        result = rows.map((r) => ({
           ...r,
-          tags,
+          order: r.orderIndex,
+        }));
+      } else if (collection === "gallery") {
+        const rows = await db.query.gallery.findMany({
+          orderBy: [desc(gallery.createdAt)],
+          limit: 100,
+        });
+        result = rows.map((r) => ({
+          ...r,
+          image: r.imageUrl,
+          caption: r.title,
           createdAt: new Date(r.createdAt),
-        };
-      });
-    } else if (collection === "announcements") {
-      const rows = await db.query.announcements.findMany({
-        where: eq(announcements.published, true),
-        orderBy: [desc(announcements.publishedAt)],
-        limit: 50,
-      });
-      items = rows.map((r) => ({
-        ...r,
-        publishedAt: r.publishedAt ? new Date(r.publishedAt) : null,
-      }));
-    } else if (collection === "team") {
-      const rows = await db.query.teamMembers.findMany({
-        orderBy: [asc(teamMembers.orderIndex)],
-        limit: 100,
-      });
-      items = rows.map((r) => ({
-        ...r,
-        order: r.orderIndex,
-      }));
-    } else if (collection === "gallery") {
-      const rows = await db.query.gallery.findMany({
-        orderBy: [desc(gallery.createdAt)],
-        limit: 100,
-      });
-      items = rows.map((r) => ({
-        ...r,
-        image: r.imageUrl,
-        caption: r.title,
-        createdAt: new Date(r.createdAt),
-      }));
-    }
+        }));
+      }
 
+      return result;
+    });
 
     const cacheHeader = CACHE_TTL[collection] ?? "s-maxage=60, stale-while-revalidate=30";
 

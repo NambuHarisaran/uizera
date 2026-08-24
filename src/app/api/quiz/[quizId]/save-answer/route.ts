@@ -15,13 +15,23 @@ import { saveAnswerSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
 
-/**
- * PATCH /api/quiz/[quizId]/save-answer
- * Persists partial answers mid-attempt in Cloudflare D1 without submitting.
- */
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ quizId: string }> }
+) {
+  return handleSaveAnswer(req, params);
+}
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ quizId: string }> }
+) {
+  return handleSaveAnswer(req, params);
+}
+
+async function handleSaveAnswer(
+  req: NextRequest,
+  params: Promise<{ quizId: string }>
 ) {
   return handleApi(async () => {
     assertSameOrigin(req);

@@ -20,6 +20,7 @@ import {
   XCircle,
   Zap,
 } from "lucide-react";
+import Image from "next/image";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -171,7 +172,8 @@ export default function QuizResultsPage({
   const [reviewFilter, setReviewFilter] = useState<"all" | "correct" | "incorrect">("all");
 
   const attempt = data?.attempt;
-  const items = data?.items ?? [];
+  const rawItems = data?.items;
+  const items = useMemo(() => rawItems ?? [], [rawItems]);
 
   const pct =
     attempt && attempt.maxScore > 0
@@ -491,12 +493,13 @@ export default function QuizResultsPage({
                   <CardContent className="space-y-3">
                     {/* Image if question had an illustration */}
                     {item.question.imageUrl && (
-                      <div className="pb-2">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
+                      <div className="relative mb-3 h-48 w-full overflow-hidden rounded-xl border bg-muted/50 p-2">
+                        <Image
                           src={item.question.imageUrl}
                           alt="Question diagram"
-                          className="rounded-xl border max-h-48 w-full object-contain bg-muted p-2"
+                          fill
+                          sizes="(max-width: 768px) 100vw, 650px"
+                          className="object-contain p-2"
                         />
                       </div>
                     )}

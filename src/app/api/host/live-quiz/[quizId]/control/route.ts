@@ -11,6 +11,7 @@ import {
 import { ApiError, assertSameOrigin, handleApi, jsonOk, parseBody, requireQuizHost } from "@/lib/server/api";
 import { audit } from "@/lib/server/audit";
 import { endLiveQuizSession } from "@/lib/server/live-quiz";
+import { invalidateMemoryCache } from "@/lib/server/cache";
 
 export const runtime = "nodejs";
 
@@ -178,6 +179,8 @@ export async function POST(
       target: quizId,
       details: { questionIndex, targetUid },
     });
+
+    invalidateMemoryCache(`live_stage_${quizId}`);
 
     const updatedSession = await db.query.liveQuizSessions.findFirst({
       where: eq(liveQuizSessions.quizId, quizId),

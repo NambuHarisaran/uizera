@@ -5,6 +5,7 @@ import { db } from "@/lib/db/client";
 import { users, coinTransactions } from "@/lib/db/schema";
 import { ApiError } from "@/lib/server/api";
 import { levelForXp } from "@/lib/utils";
+import { invalidateMemoryCache } from "@/lib/server/cache";
 import type { AppUser, CoinSource } from "@/types";
 
 interface AwardOptions {
@@ -92,6 +93,8 @@ export async function bumpStats(
       badges: JSON.stringify(badges),
     })
     .where(eq(users.uid, uid));
+
+  invalidateMemoryCache("leaderboard");
 }
 
 /**
@@ -177,6 +180,8 @@ export async function awardCoins(opts: AwardOptions): Promise<AwardResult> {
       createdAt: now,
     });
   }
+
+  invalidateMemoryCache("leaderboard");
 
   return { newBalance: coins, newBadges };
 

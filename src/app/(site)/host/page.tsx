@@ -57,7 +57,7 @@ export default function HostPortalPage() {
           <h1 className="font-display text-3xl font-bold">My Assigned Quizzes</h1>
         </div>
         <p className="text-muted-foreground">
-          Quizzes you have been assigned to host. Click "Start Hosting" to open the stage control.
+          Quizzes you have been assigned to host. Click &ldquo;Start Hosting&rdquo; to open the stage control.
         </p>
       </div>
 

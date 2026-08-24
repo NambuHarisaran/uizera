@@ -116,8 +116,19 @@ export async function POST(
     const coinsEarned = Math.round(score * quiz.coinsPerPoint * multiplier);
     const displayName = userRecord?.displayName ?? "Member";
 
+    // Verify that the attempt is still in_progress immediately before committing
+    const activeAttempt = await db.query.quizAttempts.findFirst({
+      where: and(
+        eq(quizAttempts.id, body.attemptId),
+        eq(quizAttempts.status, "in_progress")
+      ),
+    });
+    if (!activeAttempt) {
+      throw new ApiError(400, "This attempt was already submitted.");
+    }
+
     // Atomically transition attempt status from in_progress to submitted
-    const updateRes = await db
+    await db
       .update(quizAttempts)
       .set({
         status: "submitted",

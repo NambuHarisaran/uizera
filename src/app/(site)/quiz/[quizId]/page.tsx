@@ -23,12 +23,14 @@ import {
   Trophy,
   Zap,
 } from "lucide-react";
+import Image from "next/image";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Spinner } from "@/components/shared/spinner";
+import { QuizTimer } from "@/components/shared/quiz-timer";
 import { useQuiz } from "@/lib/hooks";
 import { formatCoins, formatDuration } from "@/lib/utils";
 import type { QuestionType } from "@/types";
@@ -60,7 +62,6 @@ export default function QuizPlayPage({ params }: { params: Promise<{ quizId: str
   }>>([]);
   const [answers, setAnswers] = useState<Record<string, number[]>>({});
   const [currentQIndex, setCurrentQIndex] = useState(0);
-  const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showNavigator, setShowNavigator] = useState(false);
 
@@ -95,6 +96,11 @@ export default function QuizPlayPage({ params }: { params: Promise<{ quizId: str
         const err = await res.json().catch(() => null);
         throw new Error(err?.error ?? "Submission failed.");
       }
+      // Clean up localStorage buffer on successful submission
+      try {
+        localStorage.removeItem(`uizera_attempt_${id}`);
+      } catch {}
+
       toast.success("Quiz submitted successfully!");
       router.push(`/quiz/${quizId}/results?attemptId=${id}`);
     } catch (err) {
@@ -104,21 +110,35 @@ export default function QuizPlayPage({ params }: { params: Promise<{ quizId: str
     }
   }, [quizId, router]);
 
-  // ── Countdown timer — uses wall-clock calculation against deadlineAt ─────────────
-  useEffect(() => {
-    if (!attempting || !deadlineAtRef.current) return;
-    const timer = setInterval(() => {
-      const remaining = Math.max(0, Math.ceil((deadlineAtRef.current! - Date.now()) / 1000));
-      setTimeLeft(remaining);
-      if (remaining <= 0) {
-        clearInterval(timer);
-        void handleSubmitQuiz(answersRef.current);
-      }
-    }, 500);
-    return () => clearInterval(timer);
-  }, [attempting, handleSubmitQuiz]);
+  // ── Auto-expire callback from QuizTimer ─────────────────────────────────
+  const handleAutoExpire = useCallback(() => {
+    void handleSubmitQuiz(answersRef.current);
+  }, [handleSubmitQuiz]);
 
-  // ── Debounced auto-save ──────────────────────────────────────────────────
+  // ── Anti-cheat: Track tab switching during active quiz attempt ──────────
+  useEffect(() => {
+    if (!attempting) return;
+    const handleVisibility = () => {
+      if (document.hidden) {
+        toast.warning("Warning: Leaving or switching tabs during a quiz is monitored.", {
+          duration: 4000,
+        });
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [attempting]);
+
+  // ── Dual-write to LocalStorage on every answer selection ─────────────────
+  useEffect(() => {
+    if (attempting && attemptId && Object.keys(answers).length > 0) {
+      try {
+        localStorage.setItem(`uizera_attempt_${attemptId}`, JSON.stringify(answers));
+      } catch {}
+    }
+  }, [answers, attempting, attemptId]);
+
+  // ── Debounced auto-save to server ─────────────────────────────────────────
   const debouncedSave = useMemo(
     () =>
       debounce(async (latestAnswers: Record<string, number[]>, aid: string) => {
@@ -141,7 +161,26 @@ export default function QuizPlayPage({ params }: { params: Promise<{ quizId: str
     }
   }, [answers, attempting, attemptId, debouncedSave]);
 
-  // ── Start quiz ────────────────────────────────────────────────────────────
+  // ── Reliable auto-save on tab close / reload via Beacon API ──────────────
+  useEffect(() => {
+    if (!attempting || !attemptId) return;
+
+    const handleBeforeUnload = () => {
+      const payload = JSON.stringify({
+        attemptId: attemptIdRef.current,
+        answers: answersRef.current,
+      });
+      if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+        const blob = new Blob([payload], { type: "application/json" });
+        navigator.sendBeacon(`/api/quiz/${quizId}/save-answer`, blob);
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [attempting, attemptId, quizId]);
+
+  // ── Start / Resume quiz ───────────────────────────────────────────────────
   const handleStartQuiz = async () => {
     setAttempting(true);
     try {
@@ -151,19 +190,24 @@ export default function QuizPlayPage({ params }: { params: Promise<{ quizId: str
         throw new Error(err?.error ?? "Could not start quiz.");
       }
       const result = await res.json();
-      setAttemptId(result.data.attemptId);
+      const currentAid = result.data.attemptId;
+      setAttemptId(currentAid);
       setQuestions(result.data.questions);
       deadlineAtRef.current = result.data.deadlineAt;
-      // Use deadlineAt so timer is resume-safe after a hard refresh
-      const secondsLeft = Math.max(
-        0,
-        Math.floor((result.data.deadlineAt - Date.now()) / 1000)
-      );
-      setTimeLeft(secondsLeft);
-      // Restore saved answers if resuming
-      if (result.data.answers && Object.keys(result.data.answers).length > 0) {
-        setAnswers(result.data.answers);
-        toast.info("Quiz resumed — your previous answers have been restored.");
+
+      // Restore saved answers (merging server state with local storage buffer)
+      let restoredAnswers = result.data.answers || {};
+      try {
+        const localCached = localStorage.getItem(`uizera_attempt_${currentAid}`);
+        if (localCached) {
+          const parsed = JSON.parse(localCached);
+          restoredAnswers = { ...restoredAnswers, ...parsed };
+        }
+      } catch {}
+
+      if (Object.keys(restoredAnswers).length > 0) {
+        setAnswers(restoredAnswers);
+        toast.info("Quiz resumed — previous answers have been restored.");
       } else {
         toast.success("Quiz started! Good luck!");
       }
@@ -175,6 +219,12 @@ export default function QuizPlayPage({ params }: { params: Promise<{ quizId: str
 
   // ── Answer selection (type-aware) ─────────────────────────────────────────
   const handleOptionSelect = useCallback((qId: string, optionIdx: number, type: QuestionType) => {
+    if (typeof navigator !== "undefined" && navigator.vibrate) {
+      try {
+        navigator.vibrate(10);
+      } catch {}
+    }
+
     setAnswers((prev) => {
       const current = prev[qId] ?? [];
       if (type === "multi_select") {
@@ -223,15 +273,6 @@ export default function QuizPlayPage({ params }: { params: Promise<{ quizId: str
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [attempting, questions, currentQIndex, handleOptionSelect]);
-
-  // ── Timer colour & warning states ─────────────────────────────────────────
-  const isUrgent = timeLeft !== null && timeLeft <= 30;
-  const isCritical = timeLeft !== null && timeLeft <= 15;
-  const timerColor = isCritical
-    ? "text-red-500 font-extrabold animate-pulse"
-    : isUrgent
-    ? "text-amber-500 font-bold"
-    : "text-brand-500 font-semibold";
 
   // ── Loading state ─────────────────────────────────────────────────────────
   if (isLoading) {
@@ -345,23 +386,16 @@ export default function QuizPlayPage({ params }: { params: Promise<{ quizId: str
               <Flag className="h-3.5 w-3.5 text-brand-500" />
               <span className="hidden sm:inline">Navigator</span>
             </button>
-            <div className={`flex items-center gap-1.5 font-mono text-base sm:text-lg px-3 py-1 rounded-xl border ${
-              isUrgent ? "border-red-500/40 bg-red-500/10 " + timerColor : "border-border bg-muted/40 " + timerColor
-            }`}>
-              <Clock className="h-4 w-4 shrink-0" />
-              {timeLeft !== null ? formatDuration(timeLeft) : "--:--"}
-            </div>
+            <QuizTimer
+              deadlineAt={deadlineAtRef.current ?? Date.now() + 600000}
+              onExpire={handleAutoExpire}
+            />
           </div>
         </div>
 
         {/* ── Progress bar ──────────────────────────────────────────────── */}
         <div className="space-y-1">
           <Progress value={progressPct} className="h-2 rounded-full" />
-          {isUrgent && (
-            <p className="text-[11px] text-red-500 font-semibold text-right animate-pulse">
-              ⚡ Time is running out! Submit when finished.
-            </p>
-          )}
         </div>
 
         {/* ── Question Navigator (collapsible) ─────────────────────────── */}
@@ -474,12 +508,13 @@ export default function QuizPlayPage({ params }: { params: Promise<{ quizId: str
 
               {/* Image for image-type questions */}
               {currentQ.imageUrl && (
-                <div className="px-6 pb-3">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                <div className="relative mx-6 mb-3 h-52 overflow-hidden rounded-xl border bg-muted/50 p-2">
+                  <Image
                     src={currentQ.imageUrl}
                     alt="Question illustration"
-                    className="rounded-xl border max-h-56 w-full object-contain bg-muted p-2"
+                    fill
+                    sizes="(max-width: 768px) 100vw, 650px"
+                    className="object-contain p-2"
                   />
                 </div>
               )}

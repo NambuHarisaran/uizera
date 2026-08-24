@@ -18,8 +18,12 @@ import { getQuizQuestions } from "@/lib/server/quiz";
  */
 export async function endLiveQuizSession(
   quizId: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  quizData: Record<string, any>
+  quizData: {
+    title?: string;
+    xpReward?: number | null;
+    coinsPerPoint?: number | null;
+    [key: string]: unknown;
+  }
 ): Promise<void> {
   const now = Date.now();
 

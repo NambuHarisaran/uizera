@@ -12,6 +12,7 @@ import {
 } from "@/lib/server/api";
 import { audit } from "@/lib/server/audit";
 import { quizUpsertSchema } from "@/lib/validation";
+import { invalidateMemoryCache } from "@/lib/server/cache";
 
 export const runtime = "nodejs";
 
@@ -167,6 +168,11 @@ export async function PUT(
       });
     }
 
+    invalidateMemoryCache(`quiz_${quizId}`);
+    invalidateMemoryCache(`quiz_questions_${quizId}`);
+    invalidateMemoryCache(`quiz_key_${quizId}`);
+    invalidateMemoryCache(`live_stage_${quizId}`);
+
     await audit({
       actorUid: admin.uid,
       actorEmail: admin.email,
@@ -200,6 +206,11 @@ export async function DELETE(
     await db.delete(liveQuizParticipants).where(eq(liveQuizParticipants.quizId, quizId));
     await db.delete(liveQuizSessions).where(eq(liveQuizSessions.quizId, quizId));
     await db.delete(quizzes).where(eq(quizzes.id, quizId));
+
+    invalidateMemoryCache(`quiz_${quizId}`);
+    invalidateMemoryCache(`quiz_questions_${quizId}`);
+    invalidateMemoryCache(`quiz_key_${quizId}`);
+    invalidateMemoryCache(`live_stage_${quizId}`);
 
     await audit({
       actorUid: admin.uid,

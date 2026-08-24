@@ -1,11 +1,13 @@
 import "server-only";
 
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { eq } from "drizzle-orm";
 import { adminAuth } from "@/lib/firebase/admin";
 import { SESSION_COOKIE } from "@/lib/constants";
 import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema";
+import { remember } from "@/lib/server/cache";
 import type { AppUser, Role } from "@/types";
 
 export interface SessionUser {
@@ -35,65 +37,68 @@ function isSuperAdminEmail(email?: string | null): boolean {
 /**
  * Verify the session cookie and return the caller's identity.
  * Authoritative user and role data is read from Cloudflare D1.
+ * Memoized per-request with React cache() and accelerated with short 30s in-memory cache.
  */
-export async function getSessionUser(): Promise<SessionUser | null> {
+export const getSessionUser = cache(async function getSessionUser(): Promise<SessionUser | null> {
   const cookieStore = await cookies();
   const session = cookieStore.get(SESSION_COOKIE)?.value;
   if (!session) return null;
 
   try {
-    const decoded = await adminAuth().verifySessionCookie(session, true);
-    const email = (decoded.email ?? "").toLowerCase();
+    return await remember(`session_user_${session.slice(-32)}`, 30_000, async () => {
+      const decoded = await adminAuth().verifySessionCookie(session, true);
+      const email = (decoded.email ?? "").toLowerCase();
 
-    // Query D1 user record
-    const userRecord = await db.query.users.findFirst({
-      where: eq(users.uid, decoded.uid),
-    });
-
-    if (!userRecord) {
-      // Auto-provision user in D1 on first login
-      const isSuper = isSuperAdminEmail(email);
-      const initialRole: Role = isSuper ? "super_admin" : "student";
-      const now = Date.now();
-
-      await db.insert(users).values({
-        uid: decoded.uid,
-        email: email || `${decoded.uid}@user.uizera`,
-        displayName: decoded.name ?? email.split("@")[0] ?? "Member",
-        photoURL: decoded.picture ?? null,
-        role: initialRole,
-        createdAt: now,
-        lastLoginAt: now,
+      // Query D1 user record
+      const userRecord = await db.query.users.findFirst({
+        where: eq(users.uid, decoded.uid),
       });
+
+      if (!userRecord) {
+        // Auto-provision user in D1 on first login
+        const isSuper = isSuperAdminEmail(email);
+        const initialRole: Role = isSuper ? "super_admin" : "student";
+        const now = Date.now();
+
+        await db.insert(users).values({
+          uid: decoded.uid,
+          email: email || `${decoded.uid}@user.uizera`,
+          displayName: decoded.name ?? email.split("@")[0] ?? "Member",
+          photoURL: decoded.picture ?? null,
+          role: initialRole,
+          createdAt: now,
+          lastLoginAt: now,
+        });
+
+        return {
+          uid: decoded.uid,
+          email,
+          role: initialRole,
+        };
+      }
+
+      if (userRecord.disabled) return null;
+
+      // Check if role should be escalated to super_admin from env allowlist
+      let role = userRecord.role as Role;
+      if (isSuperAdminEmail(email) && role !== "super_admin") {
+        role = "super_admin";
+        await db.update(users).set({ role }).where(eq(users.uid, decoded.uid));
+      }
 
       return {
         uid: decoded.uid,
-        email,
-        role: initialRole,
+        email: (decoded.email ?? userRecord.email ?? "").toLowerCase(),
+        role: role ?? "student",
       };
-    }
-
-    if (userRecord.disabled) return null;
-
-    // Check if role should be escalated to super_admin from env allowlist
-    let role = userRecord.role as Role;
-    if (isSuperAdminEmail(email) && role !== "super_admin") {
-      role = "super_admin";
-      await db.update(users).set({ role }).where(eq(users.uid, decoded.uid));
-    }
-
-    return {
-      uid: decoded.uid,
-      email: (decoded.email ?? userRecord.email ?? "").toLowerCase(),
-      role: role ?? "student",
-    };
+    });
   } catch {
     return null;
   }
-}
+});
 
-/** Full profile for the signed-in user from Cloudflare D1. */
-export async function getAppUser(): Promise<AppUser | null> {
+/** Full profile for the signed-in user from Cloudflare D1. Memoized per-request with React cache(). */
+export const getAppUser = cache(async function getAppUser(): Promise<AppUser | null> {
   const session = await getSessionUser();
   if (!session) return null;
 
@@ -132,5 +137,5 @@ export async function getAppUser(): Promise<AppUser | null> {
     createdAt: userRecord.createdAt,
     lastLoginAt: userRecord.lastLoginAt,
   };
-}
+});
 

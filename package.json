@@ -9,9 +9,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "emulators": "firebase emulators:start",
-    "deploy:rules": "firebase deploy --only firestore:rules",
-    "deploy:functions": "firebase deploy --only functions",
+    "db:generate": "drizzle-kit generate",
+    "db:studio": "drizzle-kit studio",
     "seed": "tsx scripts/seed.ts"
   },
   "dependencies": {

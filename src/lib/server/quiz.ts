@@ -44,99 +44,106 @@ export interface AnswerKeyEntry {
   points: number;
 }
 
+import { remember } from "@/lib/server/cache";
+
 export async function getQuizOrThrow(quizId: string): Promise<Quiz> {
-  const row = await db.query.quizzes.findFirst({
-    where: eq(quizzes.id, quizId),
+  return remember(`quiz_${quizId}`, 15_000, async () => {
+    const row = await db.query.quizzes.findFirst({
+      where: eq(quizzes.id, quizId),
+    });
+    if (!row) throw new ApiError(404, "Quiz not found.");
+
+    let settings: any = {};
+    try {
+      settings = JSON.parse(row.settings ?? "{}");
+    } catch {
+      settings = {};
+    }
+
+    return {
+      id: row.id,
+      title: row.title,
+      description: row.description ?? "",
+      coverImage: row.coverImage ?? null,
+      status: row.status as QuizStatus,
+      mode: row.mode as "async" | "live",
+      startAt: row.startAt ? new Date(row.startAt) : null,
+      endAt: row.endAt ? new Date(row.endAt) : null,
+      durationSeconds: row.durationSeconds,
+      questionCount: row.questionCount,
+      totalPoints: row.totalPoints,
+      coinsPerPoint: row.coinsPerPoint,
+      xpReward: row.xpReward ?? 100,
+      settings,
+      createdBy: row.createdBy,
+      hostUid: row.hostUid ?? undefined,
+      hostDisplayName: row.hostDisplayName ?? undefined,
+      createdAt: row.createdAt ? new Date(row.createdAt) : new Date(),
+      updatedAt: row.updatedAt ? new Date(row.updatedAt) : new Date(),
+    };
   });
-  if (!row) throw new ApiError(404, "Quiz not found.");
-
-  let settings: any = {};
-  try {
-    settings = JSON.parse(row.settings ?? "{}");
-  } catch {
-    settings = {};
-  }
-
-  return {
-    id: row.id,
-    title: row.title,
-    description: row.description ?? "",
-    coverImage: row.coverImage ?? null,
-    status: row.status as QuizStatus,
-    mode: row.mode as "async" | "live",
-    startAt: row.startAt ? new Date(row.startAt) : null,
-    endAt: row.endAt ? new Date(row.endAt) : null,
-    durationSeconds: row.durationSeconds,
-    questionCount: row.questionCount,
-    totalPoints: row.totalPoints,
-    coinsPerPoint: row.coinsPerPoint,
-    xpReward: row.xpReward ?? 100,
-    settings,
-    createdBy: row.createdBy,
-    hostUid: row.hostUid ?? undefined,
-    hostDisplayName: row.hostDisplayName ?? undefined,
-    createdAt: row.createdAt ? new Date(row.createdAt) : new Date(),
-    updatedAt: row.updatedAt ? new Date(row.updatedAt) : new Date(),
-  };
-
 }
 
 export async function getQuizQuestions(
   quizId: string
 ): Promise<QuizQuestionPublic[]> {
-  const rows = await db.query.quizQuestions.findMany({
-    where: eq(quizQuestions.quizId, quizId),
-    orderBy: [asc(quizQuestions.orderIndex)],
-  });
+  return remember(`quiz_questions_${quizId}`, 30_000, async () => {
+    const rows = await db.query.quizQuestions.findMany({
+      where: eq(quizQuestions.quizId, quizId),
+      orderBy: [asc(quizQuestions.orderIndex)],
+    });
 
-  return rows.map((r) => {
-    let parsedOptions: string[] = [];
-    try {
-      parsedOptions = JSON.parse(r.options ?? "[]");
-    } catch {
-      parsedOptions = [];
-    }
-    return {
-      id: r.id,
-      type: r.type as QuestionType,
-      prompt: r.prompt,
-      imageUrl: r.imageUrl ?? null,
-      options: parsedOptions,
-      points: r.points,
-      order: r.orderIndex,
-    };
+    return rows.map((r) => {
+      let parsedOptions: string[] = [];
+      try {
+        parsedOptions = JSON.parse(r.options ?? "[]");
+      } catch {
+        parsedOptions = [];
+      }
+      return {
+        id: r.id,
+        type: r.type as QuestionType,
+        prompt: r.prompt,
+        imageUrl: r.imageUrl ?? null,
+        options: parsedOptions,
+        points: r.points,
+        order: r.orderIndex,
+      };
+    });
   });
 }
 
 export async function getAnswerKey(
   quizId: string
 ): Promise<Record<string, AnswerKeyEntry>> {
-  const [rows, questionRows] = await Promise.all([
-    db.query.quizAnswerKeys.findMany({
-      where: eq(quizAnswerKeys.quizId, quizId),
-    }),
-    db.query.quizQuestions.findMany({
-      where: eq(quizQuestions.quizId, quizId),
-    }),
-  ]);
+  return remember(`quiz_key_${quizId}`, 60_000, async () => {
+    const [rows, questionRows] = await Promise.all([
+      db.query.quizAnswerKeys.findMany({
+        where: eq(quizAnswerKeys.quizId, quizId),
+      }),
+      db.query.quizQuestions.findMany({
+        where: eq(quizQuestions.quizId, quizId),
+      }),
+    ]);
 
-  const qMap = new Map(questionRows.map((q) => [q.id, q]));
-  const map: Record<string, AnswerKeyEntry> = {};
-  for (const r of rows) {
-    let parsedCorrect: number[] = [];
-    try {
-      parsedCorrect = JSON.parse(r.correctIndices ?? "[]");
-    } catch {
-      parsedCorrect = [];
+    const qMap = new Map(questionRows.map((q) => [q.id, q]));
+    const map: Record<string, AnswerKeyEntry> = {};
+    for (const r of rows) {
+      let parsedCorrect: number[] = [];
+      try {
+        parsedCorrect = JSON.parse(r.correctIndices ?? "[]");
+      } catch {
+        parsedCorrect = [];
+      }
+      const q = qMap.get(r.questionId);
+      map[r.questionId] = {
+        correct: parsedCorrect,
+        explanation: r.explanation ?? null,
+        points: q?.points ?? 10,
+      };
     }
-    const q = qMap.get(r.questionId);
-    map[r.questionId] = {
-      correct: parsedCorrect,
-      explanation: r.explanation ?? null,
-      points: q?.points ?? 10,
-    };
-  }
-  return map;
+    return map;
+  });
 }
 
 

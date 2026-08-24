@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import Image from "next/image";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
 import {
@@ -61,10 +62,12 @@ function EventCard({ event }: { event: CommunityEvent }) {
         {/* Cover Image with Floating Date Stamp */}
         <div className="relative aspect-video overflow-hidden bg-muted">
           {event.image ? (
-            <img
+            <Image
               src={event.image}
               alt={event.title}
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              fill
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              className="object-cover transition-transform duration-500 group-hover:scale-105"
             />
           ) : (
             <div className="h-full w-full bg-gradient-to-tr from-brand-900/30 to-purple-900/20 flex items-center justify-center">
@@ -176,11 +179,12 @@ export function EventsContent() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "upcoming" | "past">("all");
 
-  const events = (data?.events ?? []) as CommunityEvent[];
-  const now = Date.now();
+  const rawEvents = data?.events;
+  const events = useMemo(() => (rawEvents ?? []) as CommunityEvent[], [rawEvents]);
 
-  const filteredEvents = useMemo(() => {
-    return events.filter((e) => {
+  const { filteredEvents, upcoming, past } = useMemo(() => {
+    const now = Date.now();
+    const filtered = events.filter((e) => {
       const d = toDate(e.date)?.getTime() ?? 0;
       if (filter === "upcoming" && d < now) return false;
       if (filter === "past" && d >= now) return false;
@@ -194,10 +198,13 @@ export function EventsContent() {
       }
       return true;
     });
-  }, [events, filter, search, now]);
 
-  const upcoming = filteredEvents.filter((e) => (toDate(e.date)?.getTime() ?? 0) >= now);
-  const past = filteredEvents.filter((e) => (toDate(e.date)?.getTime() ?? 0) < now);
+    return {
+      filteredEvents: filtered,
+      upcoming: filtered.filter((e) => (toDate(e.date)?.getTime() ?? 0) >= now),
+      past: filtered.filter((e) => (toDate(e.date)?.getTime() ?? 0) < now),
+    };
+  }, [events, filter, search]);
 
   return (
     <div className="pb-24">
@@ -243,7 +250,7 @@ export function EventsContent() {
               onClick={() => setFilter("upcoming")}
               className="text-xs rounded-lg flex-1 sm:flex-none"
             >
-              Upcoming ({events.filter((e) => (toDate(e.date)?.getTime() ?? 0) >= now).length})
+              Upcoming ({upcoming.length})
             </Button>
             <Button
               variant={filter === "past" ? "default" : "ghost"}
@@ -251,7 +258,7 @@ export function EventsContent() {
               onClick={() => setFilter("past")}
               className="text-xs rounded-lg flex-1 sm:flex-none"
             >
-              Past ({events.filter((e) => (toDate(e.date)?.getTime() ?? 0) < now).length})
+              Past ({past.length})
             </Button>
           </div>
 

@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { liveQuizParticipants, users } from "@/lib/db/schema";
 import { assertSameOrigin, handleApi, jsonOk, requireUser } from "@/lib/server/api";
+import { invalidateMemoryCache } from "@/lib/server/cache";
 
 export const runtime = "nodejs";
 
@@ -57,6 +58,8 @@ export async function POST(
         joinedAt: now,
       });
     }
+
+    invalidateMemoryCache(`live_stage_${quizId}`);
 
     return jsonOk({ kicked: false });
   });

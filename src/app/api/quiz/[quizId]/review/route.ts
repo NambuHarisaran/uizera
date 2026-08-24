@@ -8,6 +8,7 @@ import {
   jsonOk,
   requireUser,
 } from "@/lib/server/api";
+import { isAdminRole } from "@/lib/auth/session";
 import {
   buildAttemptQuestions,
   getAnswerKey,
@@ -54,6 +55,11 @@ export async function GET(
     }
     if (attempt.status !== "submitted") {
       throw new ApiError(400, "Only submitted attempts can be reviewed.");
+    }
+
+    const showReview = quiz.settings?.showReview ?? true;
+    if (!showReview && !isAdminRole(user.role)) {
+      throw new ApiError(403, "Detailed review is disabled for this quiz.");
     }
 
     let parsedAnswers: any = {};

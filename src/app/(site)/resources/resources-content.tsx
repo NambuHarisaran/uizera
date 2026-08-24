@@ -72,8 +72,9 @@ export function ResourcesContent() {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<ResourceCategory | "all">("all");
 
-  const resources = (data?.items ?? []) as LearningResource[];
-  const categories = Array.from(new Set(resources.map((r) => r.category)));
+  const rawResources = data?.items;
+  const resources = useMemo(() => (rawResources ?? []) as LearningResource[], [rawResources]);
+  const categories = useMemo(() => Array.from(new Set(resources.map((r) => r.category))), [resources]);
 
   const filtered = useMemo(() => {
     return resources.filter((r) => {

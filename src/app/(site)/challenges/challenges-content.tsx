@@ -452,8 +452,10 @@ export function ChallengesContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterTab, setFilterTab] = useState<"all" | "open" | "submitted" | "approved">("all");
 
-  const challenges = (data?.challenges ?? []) as Challenge[];
-  const submissions = (data?.submissions ?? []) as ChallengeSubmission[];
+  const rawChallenges = data?.challenges;
+  const rawSubmissions = data?.submissions;
+  const challenges = useMemo(() => (rawChallenges ?? []) as Challenge[], [rawChallenges]);
+  const submissions = useMemo(() => (rawSubmissions ?? []) as ChallengeSubmission[], [rawSubmissions]);
   const subMap = useMemo(() => new Map(submissions.map((s) => [s.challengeId, s])), [submissions]);
 
   const filteredChallenges = useMemo(() => {

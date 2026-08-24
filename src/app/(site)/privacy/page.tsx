@@ -29,9 +29,9 @@ export default function PrivacyPage() {
           <li>Improve the platform experience</li>
         </ul>
 
-        <h2>3. Data Storage</h2>
+        <h2>3. Data Storage & Security</h2>
         <p>
-          All data is stored securely in Google Firebase (Firestore) with strict security rules.
+          Authentication is powered securely by Google Firebase Authentication. All user profiles, quiz records, and transaction ledgers are stored in high-availability Cloudflare D1 encrypted databases.
           Only administrators can access user data beyond what is publicly displayed on the leaderboard.
         </p>
 

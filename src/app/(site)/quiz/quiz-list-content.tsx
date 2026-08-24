@@ -232,7 +232,8 @@ function QuizCard({ quiz }: { quiz: Quiz }) {
 // ── Main component ────────────────────────────────────────────────────────────
 export function QuizListContent() {
   const { data, isLoading } = useQuizzes();
-  const quizzes = (data?.quizzes ?? []) as Quiz[];
+  const rawQuizzes = data?.quizzes;
+  const quizzes = useMemo(() => (rawQuizzes ?? []) as Quiz[], [rawQuizzes]);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "live" | "scheduled" | "closed">("all");

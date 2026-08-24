@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Award,
@@ -204,21 +204,22 @@ export function CertificationsContent() {
 
   const [activeFilter, setActiveFilter] = useState<string>("all");
 
-  const days = (certData?.days ?? []) as CertDay[];
+  const rawDays = certData?.days;
+  const days = useMemo(() => (rawDays ?? []) as CertDay[], [rawDays]);
   const progress = (progressData?.progress ?? null) as CertProgress | null;
   const completedCount = progress?.completedCount ?? 0;
   const progressPct = days.length > 0 ? (completedCount / days.length) * 100 : 0;
 
   const isLoading = loadingDays || loadingProgress;
 
-  function getDayStatus(dayId: string): CertDayStatus {
+  const getDayStatus = useCallback((dayId: string): CertDayStatus => {
     return progress?.days?.[dayId]?.status ?? "pending";
-  }
+  }, [progress]);
 
-  function isDayLocked(day: CertDay): boolean {
+  const isDayLocked = useCallback((day: CertDay): boolean => {
     const unlockMs = toMillis(day.unlockDate);
     return unlockMs > 0 && Date.now() < unlockMs;
-  }
+  }, []);
 
   const filteredDays = useMemo(() => {
     return days.filter((d) => {
@@ -234,7 +235,7 @@ export function CertificationsContent() {
       if (activeFilter === "week4") return d.day >= 22;
       return true;
     });
-  }, [days, activeFilter, progress]);
+  }, [days, activeFilter, getDayStatus, isDayLocked]);
 
   const scrollToDay = (dayNum: number) => {
     const el = document.getElementById(`cert-day-${dayNum}`);

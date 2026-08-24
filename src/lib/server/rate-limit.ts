@@ -12,7 +12,7 @@ import { ApiError } from "@/lib/server/api";
  */
 
 const buckets = new Map<string, number[]>();
-const MAX_KEYS = 10_000;
+const MAX_KEYS = 5_000;
 
 export function rateLimit(
   key: string,
@@ -20,11 +20,24 @@ export function rateLimit(
 ): void {
   const now = Date.now();
 
-  if (buckets.size > MAX_KEYS) buckets.clear(); // crude memory cap
+  if (buckets.size >= MAX_KEYS) {
+    // Purge expired keys
+    for (const [k, timestamps] of buckets.entries()) {
+      const active = timestamps.filter((t) => now - t < windowMs);
+      if (active.length === 0) {
+        buckets.delete(k);
+      } else {
+        buckets.set(k, active);
+      }
+    }
+    if (buckets.size >= MAX_KEYS) {
+      buckets.clear();
+    }
+  }
 
   const hits = (buckets.get(key) ?? []).filter((t) => now - t < windowMs);
   if (hits.length >= limit) {
-    throw new ApiError(429, "Too many requests. Slow down and try again.");
+    throw new ApiError(429, "Too many requests. Please slow down and try again.");
   }
   hits.push(now);
   buckets.set(key, hits);

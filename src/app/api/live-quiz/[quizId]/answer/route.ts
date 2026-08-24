@@ -16,6 +16,7 @@ import {
 } from "@/lib/server/api";
 import { rateLimit } from "@/lib/server/rate-limit";
 import { getAnswerKey } from "@/lib/server/quiz";
+import { invalidateMemoryCache } from "@/lib/server/cache";
 import { liveQuizAnswerSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
@@ -139,6 +140,8 @@ export async function POST(
       .update(liveQuizSessions)
       .set({ lastAnswerAt: now, updatedAt: now })
       .where(eq(liveQuizSessions.quizId, quizId));
+
+    invalidateMemoryCache(`live_stage_${quizId}`);
 
     return jsonOk({ received: true, totalScore: newTotal });
   });

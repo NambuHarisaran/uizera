@@ -1,7 +1,8 @@
 "use client";
 
-import { use, useEffect, useRef, useState } from "react";
+import { use, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { Logo } from "@/components/layout/logo";
 import {
@@ -130,18 +131,51 @@ export default function ParticipantLiveQuizPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quizId, user, authLoading]);
 
-  // Fast real-time polling (750ms) for snappy Kahoot-style live response
+  // Adaptive real-time polling: adjusts rate based on stage state & tab visibility
   useEffect(() => {
     if (!user) return;
-    const interval = setInterval(() => {
-      void loadData();
-    }, 750);
-    return () => clearInterval(interval);
+    let timer: NodeJS.Timeout;
+
+    const scheduleNextPoll = () => {
+      // Determine optimal poll delay based on current viewState
+      let delay = 800; // default active question
+      if (document.hidden) {
+        delay = 4000; // Tab in background
+      } else if (session?.status === "ended") {
+        return; // Stopped
+      } else if (session?.status === "waiting" || session?.viewState === "lobby") {
+        delay = 2500; // Lobby stage
+      } else if (session?.viewState === "leaderboard") {
+        delay = 2000; // Standings view
+      } else if (session?.revealAnswer) {
+        delay = 1500; // Answer revealed
+      }
+
+      timer = setTimeout(async () => {
+        await loadData();
+        scheduleNextPoll();
+      }, delay);
+    };
+
+    scheduleNextPoll();
+
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        void loadData();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quizId, user]);
+  }, [quizId, user, session?.status, session?.viewState, session?.revealAnswer]);
 
   const currentQIndex = session?.currentQuestionIndex ?? 0;
-  const currentQ = questions[currentQIndex];
+  const currentQ = questions[currentQIndex] || (questions.length > 0 ? questions[questions.length - 1] : null);
+  const totalQuestionCount = quizData?.questionCount || questions.length || 1;
   const isEnded = session?.status === "ended";
   const isWaiting = session?.status === "waiting" || session?.viewState === "lobby";
   const isLeaderboard = session?.viewState === "leaderboard";
@@ -166,9 +200,9 @@ export default function ParticipantLiveQuizPage({
     tick();
     const id = setInterval(tick, 500);
     return () => clearInterval(id);
-  }, [session?.questionStartAtMs, session?.questionDurationSeconds, session?.status, isLeaderboard]);
+  }, [session, isLeaderboard]);
 
-  const handleSelect = async (questionId: string, optionIdx: number) => {
+  const handleSelect = useCallback(async (questionId: string, optionIdx: number) => {
     if (myAnswers[questionId] || isRevealed || submittingQ || isKicked) return;
 
     // ⚡ 1. Instant optimistic locking for 0ms lag on mobile/desktop
@@ -200,7 +234,7 @@ export default function ParticipantLiveQuizPage({
     } finally {
       setSubmittingQ(null);
     }
-  };
+  }, [myAnswers, isRevealed, submittingQ, isKicked, quizId, currentQIndex]);
 
   // Keyboard shortcut listener (1-4, A-D) during active live question
   useEffect(() => {
@@ -244,7 +278,7 @@ export default function ParticipantLiveQuizPage({
     isWaiting,
     isLeaderboard,
     isEnded,
-    currentQIndex,
+    handleSelect,
   ]);
 
   const handleGoogleLogin = async () => {
@@ -372,7 +406,7 @@ export default function ParticipantLiveQuizPage({
                 ? "Stage Lobby"
                 : isLeaderboard
                 ? "Current Standings"
-                : `Question ${currentQIndex + 1} of ${questions.length}`}
+                : `Question ${currentQIndex + 1} of ${totalQuestionCount}`}
             </p>
           </div>
         </div>
@@ -447,7 +481,7 @@ export default function ParticipantLiveQuizPage({
             <Card className="border-2 border-brand-500/30 shadow-lg p-6 sm:p-8 space-y-6">
               <div className="flex items-center justify-between text-xs font-bold text-muted-foreground">
                 <Badge className="bg-brand-500 text-white text-[11px]">
-                  QUESTION {currentQIndex + 1} OF {questions.length}
+                  QUESTION {currentQIndex + 1} OF {totalQuestionCount}
                 </Badge>
                 <span className="flex items-center gap-2">
                   <Users className="h-3.5 w-3.5" /> {answeredCount} answered
@@ -459,12 +493,13 @@ export default function ParticipantLiveQuizPage({
               </h2>
 
               {currentQ?.imageUrl && (
-                <div className="flex justify-center">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                <div className="relative mx-auto h-48 w-full max-w-md overflow-hidden rounded-xl border bg-muted/50 p-2">
+                  <Image
                     src={currentQ.imageUrl}
                     alt="Illustration"
-                    className="rounded-xl border max-h-48 object-contain bg-muted"
+                    fill
+                    sizes="(max-width: 768px) 100vw, 450px"
+                    className="object-contain p-2"
                   />
                 </div>
               )}

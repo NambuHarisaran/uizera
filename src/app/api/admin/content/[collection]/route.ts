@@ -13,6 +13,7 @@ import {
 } from "@/lib/server/api";
 import { audit } from "@/lib/server/audit";
 import { CONTENT_SCHEMAS, type ContentCollection } from "@/lib/validation";
+import { invalidateMemoryCache } from "@/lib/server/cache";
 
 export const runtime = "nodejs";
 
@@ -98,6 +99,8 @@ export async function POST(
         createdAt: now,
       });
     }
+
+    invalidateMemoryCache(`content_${collection}`);
 
     await audit({
       actorUid: admin.uid,
@@ -193,6 +196,8 @@ export async function PUT(
         .where(eq(gallery.id, body.id));
     }
 
+    invalidateMemoryCache(`content_${collection}`);
+
     await audit({
       actorUid: admin.uid,
       actorEmail: admin.email,
@@ -238,6 +243,8 @@ export async function DELETE(
     } else if (collection === "gallery") {
       await db.delete(gallery).where(eq(gallery.id, docId));
     }
+
+    invalidateMemoryCache(`content_${collection}`);
 
     await audit({
       actorUid: admin.uid,

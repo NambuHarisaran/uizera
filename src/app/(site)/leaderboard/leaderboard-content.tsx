@@ -408,11 +408,12 @@ export function LeaderboardContent() {
   const [period, setPeriod] = useState<LeaderboardPeriod>("overall");
   const [searchQuery, setSearchQuery] = useState("");
   const { data, isLoading } = useLeaderboard(period);
-  const entries = data?.entries ?? [];
+  const rawEntries = data?.entries;
+  const entries = useMemo(() => (rawEntries ?? []) as LeaderboardEntry[], [rawEntries]);
 
   // Summary Metrics
   const totalCoinsPool = useMemo(() => {
-    return entries.reduce((acc, e) => acc + ((e[coinField[period]] as number) || 0), 0);
+    return entries.reduce((acc: number, e: LeaderboardEntry) => acc + ((e[coinField[period]] as number) || 0), 0);
   }, [entries, period]);
 
   return (

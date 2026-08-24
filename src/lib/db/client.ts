@@ -1,3 +1,5 @@
+import "server-only";
+
 import { drizzle } from "drizzle-orm/sqlite-proxy";
 import * as schema from "./schema";
 

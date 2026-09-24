@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { certProgram, certProgress } from "@/lib/db/schema";
+import { certProgram, certProgress, users } from "@/lib/db/schema";
 import {
   ApiError,
   assertSameOrigin,
@@ -17,8 +17,66 @@ import { certVerifySchema } from "@/lib/validation";
 export const runtime = "nodejs";
 
 /**
+ * GET /api/admin/certifications/verify
+ * Lists all pending certification completion reports for teacher review.
+ */
+export async function GET() {
+  return handleApi(async () => {
+    await requireAdmin();
+    // Query certProgress where completed = false
+    const pendingList = await db.query.certProgress.findMany({
+      where: eq(certProgress.completed, false),
+    });
+
+    if (pendingList.length === 0) {
+      return jsonOk({ pending: [] });
+    }
+
+    const userUids = Array.from(new Set(pendingList.map((p) => p.uid)));
+    const dayIds = Array.from(new Set(pendingList.map((p) => p.dayId)));
+
+    const [userRecords, dayRecords] = await Promise.all([
+      db.query.users.findMany({
+        where: inArray(users.uid, userUids),
+      }),
+      db.query.certProgram.findMany({
+        where: inArray(certProgram.dayId, dayIds),
+      }),
+    ]);
+
+    const userMap = new Map(userRecords.map((u) => [u.uid, u]));
+    const dayMap = new Map(dayRecords.map((d) => [d.dayId, d]));
+
+    const pending = pendingList.map((p) => {
+      const u = userMap.get(p.uid);
+      const d = dayMap.get(p.dayId);
+      return {
+        uid: p.uid,
+        dayId: p.dayId,
+        dayNumber: d?.dayNumber ?? 0,
+        dayTitle: d?.title ?? p.dayId,
+        coins: d?.coins ?? 50,
+        xp: d?.xp ?? 50,
+        user: {
+          displayName: u?.displayName || "Unknown Student",
+          email: u?.email || "",
+          photoURL: u?.photoURL,
+          department: u?.department,
+          year: u?.year,
+          regNo: u?.regNo,
+        },
+        submissionLink: p.submissionLink || null,
+        completedAt: p.completedAt,
+      };
+    });
+
+    return jsonOk({ pending });
+  });
+}
+
+/**
  * POST /api/admin/certifications/verify
- * Bulk-verify certification completion for students in Cloudflare D1.
+ * Bulk-verify or reject certification completion for students in Cloudflare D1.
  */
 export async function POST(req: NextRequest) {
   return handleApi(async () => {
@@ -36,6 +94,20 @@ export async function POST(req: NextRequest) {
 
     for (const uid of body.uids) {
       try {
+        if (body.status === "rejected") {
+          // Remove pending progress so student can retry
+          await db
+            .delete(certProgress)
+            .where(
+              and(
+                eq(certProgress.uid, uid),
+                eq(certProgress.dayId, body.dayId)
+              )
+            );
+          results.push({ uid, ok: true });
+          continue;
+        }
+
         const existingProgress = await db.query.certProgress.findFirst({
           where: and(
             eq(certProgress.uid, uid),

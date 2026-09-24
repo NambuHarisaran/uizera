@@ -27,6 +27,7 @@ import Image from "next/image";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Spinner } from "@/components/shared/spinner";
@@ -64,6 +65,7 @@ export default function QuizPlayPage({ params }: { params: Promise<{ quizId: str
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [showNavigator, setShowNavigator] = useState(false);
+  const [tabSwitches, setTabSwitches] = useState(0);
 
   // ── Stable refs to break stale closures ──────────────────────────────────
   const answersRef = useRef<Record<string, number[]>>({});
@@ -120,8 +122,18 @@ export default function QuizPlayPage({ params }: { params: Promise<{ quizId: str
     if (!attempting) return;
     const handleVisibility = () => {
       if (document.hidden) {
-        toast.warning("Warning: Leaving or switching tabs during a quiz is monitored.", {
-          duration: 4000,
+        setTabSwitches((c) => {
+          const next = c + 1;
+          if (next <= 3) {
+            toast.warning(`Notice (${next}/3): Tab switching is monitored. Please remain on the quiz page.`, {
+              duration: 4000,
+            });
+          } else {
+            toast.error("Multiple tab switches detected and recorded in your quiz attempt audit log.", {
+              duration: 5000,
+            });
+          }
+          return next;
         });
       }
     };
@@ -356,36 +368,42 @@ export default function QuizPlayPage({ params }: { params: Promise<{ quizId: str
       (qid) => (answers[qid]?.length ?? 0) > 0
     ).length;
     const isMultiSelect = currentQ.type === "multi_select";
+    const currentAnswers = answers[currentQ.id] ?? [];
+    const selectedCount = currentAnswers.length;
 
     return (
-      <div className="container max-w-3xl py-8 space-y-5 select-none">
+      <div className="container max-w-6xl py-6 pb-28 sm:pb-10 space-y-6 select-none">
         {/* ── Header bar ────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between gap-3 rounded-2xl border bg-card/95 backdrop-blur-md p-4 shadow-sm">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <span className="font-mono text-xs font-bold text-brand-500">
-                Q{currentQIndex + 1}/{questions.length}
-              </span>
+              <Badge variant="outline" className="font-mono text-xs font-bold text-brand-600 dark:text-brand-400 bg-brand-500/10 border-brand-500/30">
+                Q{currentQIndex + 1} of {questions.length}
+              </Badge>
               <h2 className="truncate font-display text-base sm:text-lg font-bold" title={quiz.title}>
                 {quiz.title}
               </h2>
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2">
-              <span>{answeredCount} of {questions.length} answered</span>
-              <span>•</span>
-              <span className="hidden sm:inline text-muted-foreground/80">Press keys 1-4 or A-D to select</span>
+            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
+              <span>{answeredCount} of {questions.length} answered ({Math.round((answeredCount / questions.length) * 100)}%)</span>
+              <span className="hidden md:inline">•</span>
+              <span className="hidden md:inline text-muted-foreground/80">Keys 1-4 or A-D to select • ← / → to navigate</span>
             </p>
           </div>
 
-          <div className="flex shrink-0 items-center gap-3">
-            <button
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            {/* Mobile/Tablet Navigator trigger button */}
+            <Button
               type="button"
-              onClick={() => setShowNavigator((v) => !v)}
-              className="flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold hover:bg-accent transition-colors"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowNavigator(true)}
+              className="flex lg:hidden items-center gap-1.5 rounded-xl border text-xs font-bold h-9"
             >
-              <Flag className="h-3.5 w-3.5 text-brand-500" />
-              <span className="hidden sm:inline">Navigator</span>
-            </button>
+              <Compass className="h-3.5 w-3.5 text-brand-500" />
+              <span>Questions</span>
+            </Button>
+
             <QuizTimer
               deadlineAt={deadlineAtRef.current ?? Date.now() + 600000}
               onExpire={handleAutoExpire}
@@ -398,228 +416,348 @@ export default function QuizPlayPage({ params }: { params: Promise<{ quizId: str
           <Progress value={progressPct} className="h-2 rounded-full" />
         </div>
 
-        {/* ── Question Navigator (collapsible) ─────────────────────────── */}
-        <AnimatePresence>
-          {showNavigator && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden"
-            >
-              <Card className="p-4 border-2 border-brand-500/20">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                    Question Navigator
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setShowNavigator(false)}
-                    className="text-xs text-muted-foreground hover:text-foreground font-semibold"
-                  >
-                    Close ✕
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {questions.map((q, idx) => {
-                    const isAnswered = (answers[q.id]?.length ?? 0) > 0;
-                    const isCurrent = idx === currentQIndex;
-                    return (
-                      <button
-                        key={q.id}
-                        type="button"
-                        onClick={() => {
-                          setCurrentQIndex(idx);
-                          setShowNavigator(false);
-                        }}
-                        className={`flex h-10 w-10 items-center justify-center rounded-xl text-sm font-bold transition-all ${
-                          isCurrent
-                            ? "bg-brand-500 text-white ring-4 ring-brand-500/30 scale-105"
-                            : isAnswered
-                            ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/40"
-                            : "border bg-card hover:bg-accent text-foreground"
-                        }`}
-                      >
-                        {idx + 1}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="mt-4 flex flex-wrap gap-4 text-xs font-medium text-muted-foreground border-t pt-3">
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-3 w-3 rounded-md bg-brand-500" />
-                    Current
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-3 w-3 rounded-md bg-emerald-500/20 border border-emerald-500/40" />
-                    Answered ({answeredCount})
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-3 w-3 rounded-md border bg-card" />
-                    Remaining ({questions.length - answeredCount})
-                  </span>
-                </div>
-              </Card>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* ── Question Card ─────────────────────────────────────────────── */}
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentQ.id}
-            initial={{ opacity: 0, x: 16 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -16 }}
-            transition={{ duration: 0.2 }}
-          >
-            <Card className="border-2 shadow-lg">
-              <CardHeader className="pb-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <Badge className="bg-brand-500/10 text-brand-600 dark:text-brand-400 border-brand-500/20 text-xs font-bold">
-                        Question {currentQIndex + 1}
+        {/* ── 2-Column Responsive Layout (Main Question Arena + Pinned Navigator) ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Main Question Card Column */}
+          <div className="lg:col-span-8 space-y-4">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentQ.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.18 }}
+              >
+                <Card className="border-2 shadow-sm rounded-2xl overflow-hidden">
+                  <CardHeader className="pb-3 bg-muted/20 border-b">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1.5 flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge className="bg-brand-500/10 text-brand-600 dark:text-brand-400 border-brand-500/20 text-xs font-bold">
+                            Question {currentQIndex + 1}
+                          </Badge>
+                          {isMultiSelect ? (
+                            <Badge className="bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30 text-xs font-bold">
+                              <CheckSquare className="mr-1 h-3 w-3" /> Multi-select ({selectedCount} selected)
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-xs">
+                              Single Choice
+                            </Badge>
+                          )}
+                        </div>
+                        <CardTitle className="text-lg sm:text-xl font-bold leading-relaxed pt-1 text-foreground">
+                          {currentQ.prompt}
+                        </CardTitle>
+                      </div>
+                      <Badge variant="secondary" className="shrink-0 font-mono font-bold text-xs">
+                        {currentQ.points} pt{currentQ.points !== 1 ? "s" : ""}
                       </Badge>
-                      {isMultiSelect ? (
-                        <Badge className="bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20 text-xs font-bold">
-                          <CheckSquare className="mr-1 h-3 w-3" /> Multi-select
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-xs">
-                          Single Choice
-                        </Badge>
-                      )}
                     </div>
-                    <CardTitle className="text-lg sm:text-xl font-bold leading-relaxed pt-2">
-                      {currentQ.prompt}
-                    </CardTitle>
-                  </div>
-                  <Badge variant="secondary" className="shrink-0 font-mono font-bold text-xs">
-                    {currentQ.points} pt{currentQ.points !== 1 ? "s" : ""}
-                  </Badge>
-                </div>
-                {isMultiSelect && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    💡 Select all correct answers. Partial credit is awarded.
-                  </p>
-                )}
-              </CardHeader>
 
-              {/* Image for image-type questions */}
-              {currentQ.imageUrl && (
-                <div className="relative mx-6 mb-3 h-52 overflow-hidden rounded-xl border bg-muted/50 p-2">
-                  <Image
-                    src={currentQ.imageUrl}
-                    alt="Question illustration"
-                    fill
-                    sizes="(max-width: 768px) 100vw, 650px"
-                    className="object-contain p-2"
-                  />
-                </div>
-              )}
+                    {isMultiSelect && (
+                      <div className="mt-2.5 flex items-center gap-1.5 rounded-lg bg-purple-500/10 px-3 py-1.5 text-xs font-medium text-purple-700 dark:text-purple-300">
+                        <CheckSquare className="h-3.5 w-3.5 shrink-0" />
+                        <span>Select all options that apply. Partial credit will be calculated upon submission.</span>
+                      </div>
+                    )}
+                  </CardHeader>
 
-              <CardContent className="space-y-3 pt-2">
-                {currentQ.options.map((opt, oIdx) => {
-                  const isSelected = answers[currentQ.id]?.includes(oIdx) ?? false;
-                  const letter = String.fromCharCode(65 + oIdx);
-                  const numKey = oIdx + 1;
+                  {/* Image for image-type questions */}
+                  {currentQ.imageUrl && (
+                    <div className="relative mx-4 sm:mx-6 my-4 h-56 sm:h-64 overflow-hidden rounded-xl border bg-muted/40 p-2">
+                      <Image
+                        src={currentQ.imageUrl}
+                        alt="Question illustration"
+                        fill
+                        sizes="(max-width: 768px) 100vw, 700px"
+                        className="object-contain p-2"
+                      />
+                    </div>
+                  )}
 
-                  return (
-                    <button
-                      key={oIdx}
-                      type="button"
-                      role={isMultiSelect ? "checkbox" : "radio"}
-                      aria-checked={isSelected}
-                      onClick={() =>
-                        handleOptionSelect(currentQ.id, oIdx, currentQ.type)
-                      }
-                      className={`group flex w-full items-center justify-between rounded-2xl border-2 p-4 text-left font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.99] ${
-                        isSelected
-                          ? "border-brand-500 bg-brand-500/10 text-brand-600 dark:text-brand-400 shadow-sm"
-                          : "border-border/70 hover:border-brand-500/40 hover:bg-accent/60"
-                      }`}
-                    >
-                      <span className="flex items-center gap-3.5">
-                        {/* Option letter label */}
-                        <span
-                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border text-xs font-bold transition-colors ${
+                  <CardContent className="space-y-3 p-4 sm:p-6">
+                    {currentQ.options.map((opt, oIdx) => {
+                      const isSelected = currentAnswers.includes(oIdx);
+                      const letter = String.fromCharCode(65 + oIdx);
+                      const numKey = oIdx + 1;
+
+                      return (
+                        <button
+                          key={oIdx}
+                          type="button"
+                          role={isMultiSelect ? "checkbox" : "radio"}
+                          aria-checked={isSelected}
+                          onClick={() =>
+                            handleOptionSelect(currentQ.id, oIdx, currentQ.type)
+                          }
+                          className={`group flex w-full items-center justify-between rounded-xl sm:rounded-2xl border-2 p-3.5 sm:p-4 text-left font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.99] ${
                             isSelected
-                              ? "border-brand-500 bg-brand-500 text-white"
-                              : "border-border bg-muted/60 group-hover:border-brand-500/40"
+                              ? "border-brand-500 bg-brand-500/10 text-brand-700 dark:text-brand-300 shadow-sm"
+                              : "border-border/70 hover:border-brand-500/40 hover:bg-accent/60 text-foreground"
                           }`}
                         >
-                          {letter}
-                        </span>
-                        <span className="text-sm sm:text-base leading-snug">{opt}</span>
-                      </span>
+                          <span className="flex items-center gap-3 sm:gap-3.5 min-w-0 flex-1">
+                            {/* Option letter label */}
+                            <span
+                              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border text-xs font-bold transition-colors ${
+                                isSelected
+                                  ? "border-brand-500 bg-brand-500 text-white"
+                                  : "border-border bg-muted/60 group-hover:border-brand-500/40"
+                              }`}
+                            >
+                              {letter}
+                            </span>
+                            <span className="text-sm sm:text-base leading-snug break-words">{opt}</span>
+                          </span>
 
-                      <div className="flex items-center gap-2 shrink-0 ml-2">
-                        {/* Keyboard shortcut hint badge */}
-                        <span className="hidden md:inline-flex items-center justify-center rounded-md border border-border/80 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground group-hover:border-brand-500/30">
-                          {numKey}
-                        </span>
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            {/* Keyboard shortcut hint badge */}
+                            <span className="hidden md:inline-flex items-center justify-center rounded-md border border-border/80 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground group-hover:border-brand-500/30">
+                              {numKey}
+                            </span>
 
-                        {isSelected ? (
-                          isMultiSelect ? (
-                            <CheckSquare className="h-5 w-5 text-brand-500" />
-                          ) : (
-                            <CheckCircle2 className="h-5 w-5 text-brand-500" />
-                          )
-                        ) : (
-                          <Circle className="h-5 w-5 text-muted-foreground/30 group-hover:text-muted-foreground/60" />
-                        )}
-                      </div>
+                            {isSelected ? (
+                              isMultiSelect ? (
+                                <CheckSquare className="h-5 w-5 text-brand-500 shrink-0" />
+                              ) : (
+                                <CheckCircle2 className="h-5 w-5 text-brand-500 shrink-0" />
+                              )
+                            ) : (
+                              <Circle className="h-5 w-5 text-muted-foreground/30 group-hover:text-muted-foreground/60 shrink-0" />
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </AnimatePresence>
+
+            {/* ── Desktop & Tablet Navigation Actions ─────────────────────── */}
+            <div className="hidden sm:flex items-center justify-between gap-3 pt-2">
+              <Button
+                variant="outline"
+                disabled={currentQIndex === 0}
+                onClick={() => setCurrentQIndex((prev) => prev - 1)}
+                className="gap-2 rounded-xl font-semibold"
+              >
+                <ArrowLeft className="h-4 w-4" /> Previous
+              </Button>
+
+              <div className="flex items-center gap-2">
+                {!isLastQ && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setCurrentQIndex((prev) => prev + 1)}
+                    className="gap-1.5 text-muted-foreground hover:text-foreground font-semibold rounded-xl"
+                  >
+                    Skip <SkipForward className="h-4 w-4" />
+                  </Button>
+                )}
+
+                {isLastQ ? (
+                  <Button
+                    onClick={() => void handleSubmitQuiz()}
+                    disabled={submitting}
+                    className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/20"
+                  >
+                    {submitting ? <Spinner className="text-white" /> : <Sparkles className="h-4 w-4" />}
+                    {submitting ? "Submitting…" : `Submit Quiz (${answeredCount}/${questions.length})`}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => setCurrentQIndex((prev) => prev + 1)}
+                    className="gap-2 bg-brand-500 hover:bg-brand-600 font-bold rounded-xl"
+                  >
+                    Next <ArrowRight className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Pinned Question Navigator Column (Desktop) ─────────────── */}
+          <div className="hidden lg:block lg:col-span-4 sticky top-20 space-y-4">
+            <Card className="border shadow-sm rounded-2xl p-4">
+              <div className="flex items-center justify-between mb-3 border-b pb-3">
+                <div className="flex items-center gap-2">
+                  <Compass className="h-4 w-4 text-brand-500" />
+                  <span className="font-display font-bold text-sm">Question Navigator</span>
+                </div>
+                <Badge variant="outline" className="text-xs font-mono">
+                  {answeredCount}/{questions.length} answered
+                </Badge>
+              </div>
+
+              {/* Grid of questions */}
+              <div className="grid grid-cols-5 gap-2 max-h-[360px] overflow-y-auto pr-1">
+                {questions.map((q, idx) => {
+                  const isAnswered = (answers[q.id]?.length ?? 0) > 0;
+                  const isCurrent = idx === currentQIndex;
+                  return (
+                    <button
+                      key={q.id}
+                      type="button"
+                      onClick={() => setCurrentQIndex(idx)}
+                      className={`flex h-10 w-full items-center justify-center rounded-xl text-xs font-bold transition-all ${
+                        isCurrent
+                          ? "bg-brand-500 text-white ring-4 ring-brand-500/30 scale-105 shadow-sm"
+                          : isAnswered
+                          ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/25"
+                          : "border bg-card hover:bg-accent text-foreground"
+                      }`}
+                      title={`Question ${idx + 1}: ${isAnswered ? "Answered" : "Unanswered"}`}
+                    >
+                      {idx + 1}
                     </button>
                   );
                 })}
-              </CardContent>
+              </div>
+
+              {/* Status Legend */}
+              <div className="mt-4 flex flex-wrap items-center gap-3 text-[11px] font-medium text-muted-foreground border-t pt-3">
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-brand-500" />
+                  Current
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                  Answered ({answeredCount})
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full border bg-card" />
+                  Remaining ({questions.length - answeredCount})
+                </span>
+              </div>
             </Card>
-          </motion.div>
-        </AnimatePresence>
 
-        {/* ── Navigation Actions ────────────────────────────────────────── */}
-        <div className="flex items-center justify-between gap-3 pt-2">
-          <Button
-            variant="outline"
-            disabled={currentQIndex === 0}
-            onClick={() => setCurrentQIndex((prev) => prev - 1)}
-            className="gap-2 rounded-xl font-semibold"
-          >
-            <ArrowLeft className="h-4 w-4" /> Previous
-          </Button>
+            {/* Keyboard shortcut guide card */}
+            <Card className="border shadow-sm rounded-2xl p-3.5 bg-muted/20">
+              <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground mb-2">
+                <Keyboard className="h-3.5 w-3.5 text-brand-500" /> Keyboard Shortcuts
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[11px] text-muted-foreground">
+                <div className="flex items-center justify-between rounded-lg border bg-card px-2 py-1">
+                  <span>Select option</span>
+                  <span className="font-mono font-bold text-foreground">1-4 / A-D</span>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border bg-card px-2 py-1">
+                  <span>Prev / Next</span>
+                  <span className="font-mono font-bold text-foreground">← / →</span>
+                </div>
+              </div>
+            </Card>
 
-          <div className="flex items-center gap-2">
-            {/* Skip button */}
-            {!isLastQ && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setCurrentQIndex((prev) => prev + 1)}
-                className="gap-1.5 text-muted-foreground hover:text-foreground font-semibold rounded-xl"
-              >
-                Skip <SkipForward className="h-4 w-4" />
-              </Button>
-            )}
-
-            {isLastQ ? (
-              <Button
-                onClick={() => void handleSubmitQuiz()}
-                disabled={submitting}
-                className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/20"
-              >
-                {submitting ? <Spinner className="text-white" /> : <Sparkles className="h-4 w-4" />}
-                {submitting ? "Submitting…" : `Submit Quiz (${answeredCount}/${questions.length})`}
-              </Button>
-            ) : (
-              <Button
-                onClick={() => setCurrentQIndex((prev) => prev + 1)}
-                className="gap-2 bg-brand-500 hover:bg-brand-600 font-bold rounded-xl"
-              >
-                Next <ArrowRight className="h-4 w-4" />
-              </Button>
+            {/* Anti-cheat tab alert badge if any detected */}
+            {tabSwitches > 0 && (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                <div>
+                  <p className="font-bold">Focus alert ({tabSwitches} logged)</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Tab switches are recorded in your attempt audit log.
+                  </p>
+                </div>
+              </div>
             )}
           </div>
+        </div>
+
+        {/* ── Mobile Modal Question Navigator (No screen layout shift) ───── */}
+        <Dialog open={showNavigator} onOpenChange={setShowNavigator}>
+          <DialogContent className="max-w-sm rounded-2xl p-5">
+            <DialogHeader className="pb-2">
+              <DialogTitle className="flex items-center justify-between text-base">
+                <span className="flex items-center gap-2">
+                  <Compass className="h-4 w-4 text-brand-500" /> Question Navigator
+                </span>
+                <Badge variant="outline" className="font-mono text-xs">
+                  {answeredCount}/{questions.length}
+                </Badge>
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="grid grid-cols-5 gap-2 py-3 max-h-[50vh] overflow-y-auto pr-1">
+              {questions.map((q, idx) => {
+                const isAnswered = (answers[q.id]?.length ?? 0) > 0;
+                const isCurrent = idx === currentQIndex;
+                return (
+                  <button
+                    key={q.id}
+                    type="button"
+                    onClick={() => {
+                      setCurrentQIndex(idx);
+                      setShowNavigator(false);
+                    }}
+                    className={`flex h-11 w-full items-center justify-center rounded-xl text-sm font-bold transition-all ${
+                      isCurrent
+                        ? "bg-brand-500 text-white ring-4 ring-brand-500/30 scale-105"
+                        : isAnswered
+                        ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/40"
+                        : "border bg-card hover:bg-accent text-foreground"
+                    }`}
+                  >
+                    {idx + 1}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-between border-t pt-3 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> {answeredCount} Answered
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full border bg-card" /> {questions.length - answeredCount} Left
+              </span>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Mobile Sticky Bottom Action Bar (Fixed, Frosted) ───────────── */}
+        <div className="sm:hidden fixed bottom-0 inset-x-0 z-30 bg-background/95 backdrop-blur-md border-t p-3 shadow-lg flex items-center justify-between gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={currentQIndex === 0}
+            onClick={() => setCurrentQIndex((prev) => prev - 1)}
+            className="rounded-xl h-10 px-3 font-semibold shrink-0"
+          >
+            <ArrowLeft className="h-4 w-4 mr-1" /> Prev
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowNavigator(true)}
+            className="flex items-center gap-1.5 font-bold text-xs h-10 rounded-xl px-2"
+          >
+            <Compass className="h-3.5 w-3.5 text-brand-500" />
+            <span>{currentQIndex + 1}/{questions.length}</span>
+          </Button>
+
+          {isLastQ ? (
+            <Button
+              size="sm"
+              onClick={() => void handleSubmitQuiz()}
+              disabled={submitting}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl h-10 px-3 shrink-0 shadow-md shadow-emerald-600/20"
+            >
+              {submitting ? <Spinner className="text-white" /> : <Sparkles className="h-4 w-4 mr-1" />}
+              {submitting ? "Submitting…" : "Submit"}
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              onClick={() => setCurrentQIndex((prev) => prev + 1)}
+              className="bg-brand-500 hover:bg-brand-600 font-bold rounded-xl h-10 px-3 shrink-0"
+            >
+              Next <ArrowRight className="h-4 w-4 ml-1" />
+            </Button>
+          )}
         </div>
       </div>
     );

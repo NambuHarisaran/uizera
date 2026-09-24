@@ -42,6 +42,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Spinner } from "@/components/shared/spinner";
 import { QrCode } from "@/components/shared/qr-code";
 import { postJson, unwrap } from "@/lib/fetcher";
@@ -72,6 +73,7 @@ export default function AdminLiveQuizStagePage({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [adminPeek, setAdminPeek] = useState(false);
+  const [showGiantQr, setShowGiantQr] = useState(false);
 
   const stageRef = useRef<HTMLDivElement>(null);
 
@@ -213,6 +215,9 @@ export default function AdminLiveQuizStagePage({
         e.preventDefault();
         if (isLeaderboard) handleControl("hideLeaderboard");
         else handleControl("showLeaderboard");
+      } else if (e.key === "q" || e.key === "Q") {
+        e.preventDefault();
+        setShowGiantQr((prev) => !prev);
       }
     };
 
@@ -279,6 +284,17 @@ export default function AdminLiveQuizStagePage({
             </Button>
           )}
 
+          {/* Giant QR Modal Toggle Button */}
+          <Button
+            onClick={() => setShowGiantQr(true)}
+            variant="outline"
+            size={isFullscreen ? "sm" : "default"}
+            className="gap-2 font-bold shadow-sm"
+            title="Open large QR code for auditorium scanning (Shortcut: Q)"
+          >
+            <QrIcon className="h-4 w-4 text-brand-500" /> Giant QR
+          </Button>
+
           {!isFullscreen && (
             <Button onClick={enterPresenterMode} variant="outline" className="gap-2 font-bold shadow-sm">
               <Maximize2 className="h-4 w-4" /> Present Fullscreen
@@ -338,11 +354,19 @@ export default function AdminLiveQuizStagePage({
                 </div>
 
                 {joinUrl && (
-                  <div className="flex justify-center py-2">
-                    <div className="rounded-2xl bg-white p-3.5 shadow-md ring-4 ring-brand-500/10 transition-transform hover:scale-105 duration-200">
+                  <button
+                    type="button"
+                    onClick={() => setShowGiantQr(true)}
+                    className="flex justify-center py-2 group cursor-zoom-in focus:outline-none w-full"
+                    title="Click to enlarge QR code for the auditorium"
+                  >
+                    <div className="relative rounded-2xl bg-white p-3.5 shadow-md ring-4 ring-brand-500/10 transition-transform group-hover:scale-105 duration-200">
                       <QrCode value={joinUrl} size={190} />
+                      <div className="absolute inset-0 bg-brand-500/10 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl flex items-center justify-center font-bold text-xs text-brand-600 bg-white/75 backdrop-blur-[1px]">
+                        <Maximize2 className="h-4 w-4 mr-1" /> Click to Enlarge
+                      </div>
                     </div>
-                  </div>
+                  </button>
                 )}
 
                 <div className="rounded-xl border bg-muted/40 px-3 py-2 text-xs font-mono select-all truncate text-foreground font-semibold">
@@ -459,7 +483,13 @@ export default function AdminLiveQuizStagePage({
             <CardContent className="p-6 sm:p-10 space-y-8">
               {currentQ ? (
                 <>
-                  <h2 className="font-display text-2xl sm:text-4xl font-extrabold text-center leading-snug">
+                  <h2
+                    className={`font-display font-black text-center leading-snug transition-all ${
+                      isFullscreen
+                        ? "text-3xl sm:text-5xl lg:text-6xl py-3"
+                        : "text-2xl sm:text-4xl"
+                    }`}
+                  >
                     {currentQ.prompt}
                   </h2>
 
@@ -476,7 +506,7 @@ export default function AdminLiveQuizStagePage({
                   )}
 
                   {/* Options Grid with Mentimeter Bar Breakdown */}
-                  <div className="grid gap-4 sm:grid-cols-2">
+                  <div className={`grid gap-4 ${isFullscreen ? "gap-6 sm:grid-cols-2 py-3" : "sm:grid-cols-2"}`}>
                     {currentQ.options?.map((opt: string, oIdx: number) => {
                       const style = optionStyleFor(oIdx);
                       const Icon = style.icon;
@@ -492,7 +522,9 @@ export default function AdminLiveQuizStagePage({
                       return (
                         <div
                           key={oIdx}
-                          className={`relative flex items-center gap-4 overflow-hidden rounded-2xl border-2 p-5 font-bold transition-all duration-300 ${
+                          className={`relative flex items-center gap-4 overflow-hidden border-2 font-bold transition-all duration-300 ${
+                            isFullscreen ? "p-6 sm:p-7 rounded-3xl" : "p-5 rounded-2xl"
+                          } ${
                             showAsCorrect
                               ? "border-emerald-500 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 ring-2 ring-emerald-500/40"
                               : showAsWrong
@@ -510,21 +542,41 @@ export default function AdminLiveQuizStagePage({
                             />
                           )}
 
-                          <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-black/10">
-                            <Icon className="h-5 w-5" />
+                          <span
+                            className={`relative flex shrink-0 items-center justify-center rounded-xl bg-black/10 ${
+                              isFullscreen ? "h-14 w-14" : "h-10 w-10"
+                            }`}
+                          >
+                            <Icon className={isFullscreen ? "h-7 w-7" : "h-5 w-5"} />
                           </span>
 
-                          <span className="relative flex-1 text-base sm:text-lg">{opt}</span>
+                          <span
+                            className={`relative flex-1 ${
+                              isFullscreen
+                                ? "text-xl sm:text-2xl lg:text-3xl leading-snug"
+                                : "text-base sm:text-lg"
+                            }`}
+                          >
+                            {opt}
+                          </span>
 
                           {/* Vote count pill */}
                           {isRevealed && optionCounts && (
-                            <span className="relative shrink-0 font-mono text-sm px-2 py-0.5 rounded-lg bg-black/10">
+                            <span
+                              className={`relative shrink-0 font-mono rounded-lg bg-black/10 ${
+                                isFullscreen ? "text-base px-3 py-1 font-bold" : "text-sm px-2 py-0.5"
+                              }`}
+                            >
                               {count} ({pct}%)
                             </span>
                           )}
 
                           {showAsCorrect && (
-                            <Badge className="relative bg-emerald-600 text-white font-bold gap-1 border-none shrink-0 text-xs">
+                            <Badge
+                              className={`relative bg-emerald-600 text-white font-bold gap-1 border-none shrink-0 ${
+                                isFullscreen ? "text-sm px-3 py-1" : "text-xs"
+                              }`}
+                            >
                               <CheckCircle2 className="h-3.5 w-3.5" /> Correct
                             </Badge>
                           )}
@@ -736,9 +788,35 @@ export default function AdminLiveQuizStagePage({
         </motion.div>
       )}
 
+      {/* Giant QR Modal for Auditorium / Hall scanning */}
+      <Dialog open={showGiantQr} onOpenChange={setShowGiantQr}>
+        <DialogContent className="max-w-xl text-center p-6 sm:p-8 rounded-3xl">
+          <DialogHeader>
+            <DialogTitle className="font-display text-2xl sm:text-3xl font-black text-center">
+              Scan to Join Live Stage! 🚀
+            </DialogTitle>
+            <DialogDescription className="text-center text-sm font-medium">
+              Point your phone camera or QR reader at the code below to join instantly.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col items-center justify-center py-4">
+            <div className="rounded-3xl bg-white p-6 shadow-2xl ring-8 ring-brand-500/20">
+              <QrCode value={joinUrl} size={300} />
+            </div>
+            <p className="mt-5 font-mono text-sm font-bold bg-muted/60 px-4 py-2 rounded-xl border select-all max-w-full truncate">
+              {joinUrl}
+            </p>
+            <p className="text-xs text-muted-foreground mt-3">
+              Press <kbd className="font-mono bg-muted px-1.5 py-0.5 rounded border">ESC</kbd> or <kbd className="font-mono bg-muted px-1.5 py-0.5 rounded border">Q</kbd> to close
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Keyboard Shortcuts Helper Pill */}
       {!isFullscreen && (
-        <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground pt-4">
+        <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground pt-4">
           <span className="flex items-center gap-1.5">
             <kbd className="px-1.5 py-0.5 rounded border bg-muted font-mono font-bold">Space</kbd> Reveal Answer
           </span>
@@ -747,6 +825,9 @@ export default function AdminLiveQuizStagePage({
           </span>
           <span className="flex items-center gap-1.5">
             <kbd className="px-1.5 py-0.5 rounded border bg-muted font-mono font-bold">L</kbd> Toggle Leaderboard
+          </span>
+          <span className="flex items-center gap-1.5">
+            <kbd className="px-1.5 py-0.5 rounded border bg-muted font-mono font-bold">Q</kbd> Giant QR
           </span>
           <span className="flex items-center gap-1.5">
             <kbd className="px-1.5 py-0.5 rounded border bg-muted font-mono font-bold">F</kbd> Fullscreen

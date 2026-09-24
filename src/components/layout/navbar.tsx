@@ -156,6 +156,26 @@ export function Navbar() {
               )}
             </Link>
 
+            {/* Quizzes Primary Link */}
+            <Link
+              href="/quiz"
+              className={cn(
+                "relative flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-semibold transition-all duration-200",
+                pathname.startsWith("/quiz")
+                  ? "bg-accent/80 text-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-accent/40 hover:text-foreground"
+              )}
+            >
+              <Gamepad2 className="h-4 w-4 text-uipath-orange" />
+              <span>Quizzes</span>
+              {pathname.startsWith("/quiz") && (
+                <motion.span
+                  layoutId="nav-active-dot"
+                  className="absolute bottom-1 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full bg-uipath-orange"
+                />
+              )}
+            </Link>
+
             {/* Community Submenu */}
             <DropdownMenu>
               <DropdownMenuTrigger
@@ -349,6 +369,30 @@ export function Navbar() {
             {/* Authenticated User Status & Dropdown */}
             {user && (
               <>
+                {/* Staff / Host Portal Quick Access for Instructors */}
+                {(isHost || isAdmin) && (
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="hidden sm:inline-flex h-8 gap-1.5 rounded-full border-uipath-orange/40 text-uipath-orange hover:bg-uipath-orange/10 font-bold text-xs"
+                  >
+                    <Link href={isAdmin ? "/admin" : "/host"}>
+                      {isAdmin ? (
+                        <>
+                          <LayoutDashboard className="h-3.5 w-3.5" />
+                          <span>Admin</span>
+                        </>
+                      ) : (
+                        <>
+                          <Crown className="h-3.5 w-3.5 text-amber-500" />
+                          <span>Host</span>
+                        </>
+                      )}
+                    </Link>
+                  </Button>
+                )}
+
                 {/* Coins Chip with glowing hover */}
                 <Link
                   href="/profile"

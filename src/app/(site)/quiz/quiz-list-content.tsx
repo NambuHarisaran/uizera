@@ -30,9 +30,9 @@ import type { Quiz, QuizStatus } from "@/types";
 
 const statusConfig: Record<QuizStatus, { label: string; variant?: "success" | "secondary" | "outline" | "default"; color?: string }> = {
   draft: { label: "Draft", color: "bg-gray-500/10 text-gray-600 dark:text-gray-400" },
-  scheduled: { label: "Upcoming", color: "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20" },
-  live: { label: "Live Now", variant: "success" },
-  closed: { label: "Completed", color: "bg-muted text-muted-foreground" },
+  scheduled: { label: "Available", color: "bg-brand-500/10 text-brand-600 dark:text-brand-400 border-brand-500/20" },
+  live: { label: "Live Stage", variant: "success" },
+  closed: { label: "Ended", color: "bg-muted text-muted-foreground" },
 };
 
 function getQuizDifficulty(totalPoints: number, durationSeconds: number) {
@@ -82,12 +82,18 @@ function QuizCardSkeleton() {
 
 // ── Quiz card ─────────────────────────────────────────────────────────────────
 function QuizCard({ quiz }: { quiz: Quiz }) {
-  const config = statusConfig[quiz.status];
   const startDate = toDate(quiz.startAt);
-  const isPlayable = quiz.status === "live" || quiz.status === "scheduled";
+  const now = Date.now();
+  const startMs = startDate ? startDate.getTime() : 0;
+  const isUpcoming = quiz.status === "scheduled" && startMs > now;
+  const isPlayable = (quiz.status === "live" || quiz.status === "scheduled") && !isUpcoming;
   const diff = getQuizDifficulty(quiz.totalPoints, quiz.durationSeconds);
   const potentialCoins = quiz.totalPoints * quiz.coinsPerPoint;
   const potentialXp = quiz.xpReward ?? Math.round(quiz.totalPoints * 1.5);
+
+  const statusBadge = isUpcoming
+    ? { label: "Starts Soon", color: "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20" }
+    : statusConfig[quiz.status];
 
   return (
     <motion.div
@@ -122,8 +128,8 @@ function QuizCard({ quiz }: { quiz: Quiz }) {
         {/* Top Badges Overlay */}
         <div className="absolute top-3 inset-x-3 flex items-center justify-between pointer-events-none">
           <div className="flex items-center gap-1.5">
-            <Badge variant={config.variant} className={`${config.color} shadow-sm backdrop-blur-md`}>
-              {config.label}
+            <Badge variant={statusBadge.variant} className={`${statusBadge.color} shadow-sm backdrop-blur-md`}>
+              {statusBadge.label}
             </Badge>
             {quiz.status === "live" && (
               <span className="relative flex h-2.5 w-2.5">
@@ -201,9 +207,9 @@ function QuizCard({ quiz }: { quiz: Quiz }) {
         <div className="mt-5">
           {isPlayable ? (
             quiz.mode !== "live" ? (
-              <Button asChild className="w-full gap-2 bg-brand-500 hover:bg-brand-600 font-semibold shadow-md">
+              <Button asChild className="w-full gap-2 bg-brand-500 hover:bg-brand-600 font-bold shadow-md">
                 <Link href={`/quiz/${quiz.id}`}>
-                  <Zap className="h-4 w-4" /> Start Standard Quiz
+                  <Zap className="h-4 w-4" /> Take Quiz
                 </Link>
               </Button>
             ) : (
@@ -216,6 +222,12 @@ function QuizCard({ quiz }: { quiz: Quiz }) {
                 </Link>
               </Button>
             )
+          ) : isUpcoming ? (
+            <Button asChild variant="outline" className="w-full gap-2 font-semibold">
+              <Link href={`/quiz/${quiz.id}`}>
+                <Calendar className="h-4 w-4 text-sky-500" /> View Schedule
+              </Link>
+            </Button>
           ) : (
             <Button asChild variant="outline" className="w-full gap-2 font-medium">
               <Link href={`/quiz/${quiz.id}`}>
@@ -479,10 +491,10 @@ export function QuizListContent() {
                 <section>
                   <div className="mb-6 flex items-center justify-between">
                     <h2 className="font-display text-2xl font-bold flex items-center gap-2">
-                      <Calendar className="h-5 w-5 text-sky-500" />
-                      Upcoming Quizzes
+                      <Zap className="h-5 w-5 text-brand-500" />
+                      Available Quizzes
                     </h2>
-                    <Badge variant="outline">{scheduled.length} Scheduled</Badge>
+                    <Badge variant="outline">{scheduled.length} Available</Badge>
                   </div>
                   <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                     {scheduled.map((q) => (

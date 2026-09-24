@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
-import { Search, Shield, ShieldAlert, Users, UserCheck, UserX } from "lucide-react";
+import { Coins, Search, Shield, ShieldAlert, Users, UserCheck, UserX } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -196,25 +197,39 @@ export default function AdminUsersPage() {
                         </TableCell>
 
                         <TableCell className="text-right">
-                          {!isSelf && !isSuperAdmin && currentUser?.role === "super_admin" && (
+                          <div className="flex items-center justify-end gap-1.5">
                             <Button
+                              asChild
                               variant="ghost"
                               size="sm"
-                              disabled={isBusy}
-                              onClick={() => handleStatusToggle(u.uid, u.disabled)}
-                              className={u.disabled ? "text-emerald-600" : "text-destructive"}
+                              className="h-8 px-2 text-amber-500 hover:text-amber-600 hover:bg-amber-500/10 font-bold text-xs"
+                              title={`Award or adjust coins for ${u.displayName}`}
                             >
-                              {u.disabled ? (
-                                <>
-                                  <UserCheck className="mr-1.5 h-4 w-4" /> Enable
-                                </>
-                              ) : (
-                                <>
-                                  <UserX className="mr-1.5 h-4 w-4" /> Disable
-                                </>
-                              )}
+                              <Link href={`/admin/coins?uid=${u.uid}`}>
+                                <Coins className="mr-1 h-3.5 w-3.5" />
+                                <span>Award</span>
+                              </Link>
                             </Button>
-                          )}
+                            {!isSelf && !isSuperAdmin && currentUser?.role === "super_admin" && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={isBusy}
+                                onClick={() => handleStatusToggle(u.uid, u.disabled)}
+                                className={u.disabled ? "text-emerald-600 h-8 text-xs" : "text-destructive h-8 text-xs"}
+                              >
+                                {u.disabled ? (
+                                  <>
+                                    <UserCheck className="mr-1.5 h-3.5 w-3.5" /> Enable
+                                  </>
+                                ) : (
+                                  <>
+                                    <UserX className="mr-1.5 h-3.5 w-3.5" /> Disable
+                                  </>
+                                )}
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
 
                       </TableRow>

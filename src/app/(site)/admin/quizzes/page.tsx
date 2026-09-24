@@ -5,9 +5,13 @@ import { motion } from "framer-motion";
 import { format } from "date-fns";
 import {
   Calendar,
+  CheckSquare,
   Clock,
   Coins,
   Crown,
+  HelpCircle,
+  ImageIcon,
+  ListChecks,
   Pencil,
   Plus,
   Radio,
@@ -15,6 +19,7 @@ import {
   Trash2,
   UserCheck,
   Wand2,
+  X,
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -37,6 +42,7 @@ interface QuestionInput {
   id?: string;
   type: QuestionType;
   prompt: string;
+  imageUrl?: string | null;
   options: string[];
   correctIndices: number[];
   explanation?: string | null;
@@ -60,6 +66,7 @@ const DEFAULT_SETTINGS: QuizSettings = {
 const DEFAULT_QUESTION: QuestionInput = {
   type: "mcq",
   prompt: "What is UiPath Studio?",
+  imageUrl: null,
   options: ["IDE for Automation", "Database engine", "Web browser", "Operating System"],
   correctIndices: [0],
   points: 10,
@@ -178,6 +185,7 @@ export default function AdminQuizzesPage() {
         id: string;
         type: QuestionType;
         prompt: string;
+        imageUrl?: string | null;
         options: string[];
         correctIndices: number[];
         explanation: string | null;
@@ -199,10 +207,11 @@ export default function AdminQuizzesPage() {
       setQuestions(
         qs.map((item) => ({
           id: item.id,
-          type: item.type,
+          type: item.type ?? "mcq",
           prompt: item.prompt,
+          imageUrl: item.imageUrl ?? null,
           options: item.options,
-          correctIndices: item.correctIndices,
+          correctIndices: item.correctIndices?.length ? item.correctIndices : [0],
           explanation: item.explanation,
           points: item.points,
         }))
@@ -249,11 +258,86 @@ export default function AdminQuizzesPage() {
       {
         type: "mcq",
         prompt: "",
+        imageUrl: null,
         options: ["Option 1", "Option 2", "Option 3", "Option 4"],
         correctIndices: [0],
         points: 10,
       },
     ]);
+  };
+
+  const handleQuestionTypeChange = (qIdx: number, newType: QuestionType) => {
+    setQuestions((prev) => {
+      const next = [...prev];
+      const current = next[qIdx]!;
+      let opts = current.options;
+      let correct = current.correctIndices;
+
+      if (newType === "true_false") {
+        opts = ["True", "False"];
+        correct = [0];
+      } else if (current.type === "true_false" && newType !== "true_false") {
+        opts = ["Option 1", "Option 2", "Option 3", "Option 4"];
+        correct = [0];
+      }
+
+      next[qIdx] = {
+        ...current,
+        type: newType,
+        options: opts,
+        correctIndices: correct,
+      };
+      return next;
+    });
+  };
+
+  const handleToggleCorrectOption = (qIdx: number, oIdx: number) => {
+    setQuestions((prev) => {
+      const next = [...prev];
+      const q = next[qIdx]!;
+      if (q.type === "multi_select") {
+        const already = q.correctIndices.includes(oIdx);
+        let updated: number[];
+        if (already) {
+          updated = q.correctIndices.length > 1 ? q.correctIndices.filter((i) => i !== oIdx) : q.correctIndices;
+        } else {
+          updated = [...q.correctIndices, oIdx].sort((a, b) => a - b);
+        }
+        next[qIdx] = { ...q, correctIndices: updated };
+      } else {
+        next[qIdx] = { ...q, correctIndices: [oIdx] };
+      }
+      return next;
+    });
+  };
+
+  const handleAddOption = (qIdx: number) => {
+    setQuestions((prev) => {
+      const next = [...prev];
+      const q = next[qIdx]!;
+      if (q.options.length >= 6) return next;
+      const nextOpts = [...q.options, `Option ${q.options.length + 1}`];
+      next[qIdx] = { ...q, options: nextOpts };
+      return next;
+    });
+  };
+
+  const handleRemoveOption = (qIdx: number, oIdx: number) => {
+    setQuestions((prev) => {
+      const next = [...prev];
+      const q = next[qIdx]!;
+      if (q.options.length <= 2) return next;
+      const nextOpts = q.options.filter((_, i) => i !== oIdx);
+      const nextCorrect = q.correctIndices
+        .filter((i) => i !== oIdx)
+        .map((i) => (i > oIdx ? i - 1 : i));
+      next[qIdx] = {
+        ...q,
+        options: nextOpts,
+        correctIndices: nextCorrect.length > 0 ? nextCorrect : [0],
+      };
+      return next;
+    });
   };
 
   const handleRemoveQuestion = (idx: number) => {
@@ -320,6 +404,7 @@ export default function AdminQuizzesPage() {
     const sanitizedQuestions = questions.map((q) => ({
       ...q,
       prompt: q.prompt.trim(),
+      imageUrl: q.imageUrl?.trim() || null,
       options: q.options.map((opt) => opt.trim()),
       explanation: q.explanation?.trim() || null,
       points: Number(q.points) || 10,
@@ -578,19 +663,42 @@ export default function AdminQuizzesPage() {
                 </div>
 
                 {questions.map((q, qIdx) => {
-                  const correctIdx = q.correctIndices[0] ?? 0;
+                  const isMulti = q.type === "multi_select";
+                  const isTrueFalse = q.type === "true_false";
+
                   return (
                     <div key={qIdx} className="space-y-3 rounded-xl border p-4 bg-muted/20 hover:border-brand-500/30 transition-colors">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
+                      {/* Question Header: Number, Type Select, Correct Status, Points & Delete */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2.5">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="font-bold text-sm">Question #{qIdx + 1}</span>
-                          <Badge variant="outline" className="text-[10px] font-medium bg-background text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
-                            ✓ Correct: Option {String.fromCharCode(65 + correctIdx)}
+
+                          {/* Question Type Selector */}
+                          <Select
+                            value={q.type}
+                            onValueChange={(val) => handleQuestionTypeChange(qIdx, val as QuestionType)}
+                          >
+                            <SelectTrigger className="h-7 w-36 text-xs font-semibold bg-background">
+                              <SelectValue placeholder="Type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="mcq">Single Choice</SelectItem>
+                              <SelectItem value="multi_select">Multi-Select</SelectItem>
+                              <SelectItem value="true_false">True / False</SelectItem>
+                              <SelectItem value="image">Diagram / Image</SelectItem>
+                            </SelectContent>
+                          </Select>
+
+                          <Badge variant="outline" className="text-[10px] font-semibold bg-background text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
+                            {isMulti
+                              ? `✓ Multi: ${q.correctIndices.map((i) => String.fromCharCode(65 + i)).join(", ")}`
+                              : `✓ Correct: Option ${String.fromCharCode(65 + (q.correctIndices[0] ?? 0))}`}
                           </Badge>
                         </div>
+
                         <div className="flex items-center gap-2">
                           <div className="flex items-center gap-1.5">
-                            <Label className="text-xs text-muted-foreground">Points</Label>
+                            <Label className="text-xs text-muted-foreground font-medium">Points</Label>
                             <Input
                               type="number"
                               min={1}
@@ -599,7 +707,7 @@ export default function AdminQuizzesPage() {
                               onChange={(e) =>
                                 handleQuestionChange(qIdx, "points", Number(e.target.value))
                               }
-                              className="h-8 w-16 text-xs text-center font-mono font-bold"
+                              className="h-7 w-16 text-xs text-center font-mono font-bold bg-background"
                             />
                           </div>
                           {questions.length > 1 && (
@@ -608,23 +716,41 @@ export default function AdminQuizzesPage() {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleRemoveQuestion(qIdx)}
-                              className="text-destructive hover:bg-destructive/10 h-8 w-8 p-0"
+                              className="text-destructive hover:bg-destructive/10 h-7 w-7 p-0"
+                              title="Delete question"
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           )}
                         </div>
                       </div>
 
+                      {/* Question Prompt */}
                       <div>
                         <Input
                           placeholder="Question Prompt..."
                           value={q.prompt}
                           onChange={(e) => handleQuestionChange(qIdx, "prompt", e.target.value)}
-                          className="font-medium text-sm"
+                          className="font-medium text-sm bg-background"
                         />
                       </div>
 
+                      {/* Optional Diagram / Image URL for image-type questions */}
+                      {q.type === "image" && (
+                        <div className="space-y-1.5 rounded-lg border bg-background/60 p-2.5">
+                          <Label className="text-xs font-semibold flex items-center gap-1.5">
+                            <ImageIcon className="h-3.5 w-3.5 text-brand-500" /> Diagram / Image URL
+                          </Label>
+                          <Input
+                            placeholder="https://example.com/diagram.png"
+                            value={q.imageUrl ?? ""}
+                            onChange={(e) => handleQuestionChange(qIdx, "imageUrl", e.target.value)}
+                            className="h-8 text-xs font-mono bg-background"
+                          />
+                        </div>
+                      )}
+
+                      {/* Options Grid */}
                       <div className="grid gap-2 sm:grid-cols-2">
                         {q.options.map((opt, oIdx) => {
                           const isCorrect = q.correctIndices.includes(oIdx);
@@ -637,13 +763,22 @@ export default function AdminQuizzesPage() {
                                   : "border-border/60 bg-background/60"
                               }`}
                             >
-                              <label className="flex items-center justify-center p-1 cursor-pointer" title={`Mark Option ${String.fromCharCode(65 + oIdx)} as correct`}>
+                              <label
+                                className="flex items-center justify-center p-1 cursor-pointer"
+                                title={
+                                  isMulti
+                                    ? `Toggle Option ${String.fromCharCode(65 + oIdx)} as correct`
+                                    : `Mark Option ${String.fromCharCode(65 + oIdx)} as correct`
+                                }
+                              >
                                 <input
-                                  type="radio"
+                                  type={isMulti ? "checkbox" : "radio"}
                                   name={`correct-${qIdx}`}
                                   checked={isCorrect}
-                                  onChange={() => handleQuestionChange(qIdx, "correctIndices", [oIdx])}
-                                  className="h-4 w-4 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
+                                  onChange={() => handleToggleCorrectOption(qIdx, oIdx)}
+                                  className={`h-4 w-4 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-600 ${
+                                    isMulti ? "rounded" : ""
+                                  }`}
                                 />
                               </label>
                               <span className="text-[11px] font-bold font-mono text-muted-foreground w-4 text-center">
@@ -651,21 +786,59 @@ export default function AdminQuizzesPage() {
                               </span>
                               <Input
                                 value={opt}
+                                disabled={isTrueFalse}
                                 onChange={(e) => handleOptionChange(qIdx, oIdx, e.target.value)}
                                 placeholder={`Option ${oIdx + 1}`}
-                                className={`h-8 text-xs ${isCorrect ? "font-semibold text-emerald-700 dark:text-emerald-300" : ""}`}
+                                className={`h-8 text-xs bg-background ${
+                                  isCorrect ? "font-semibold text-emerald-700 dark:text-emerald-300" : ""
+                                }`}
                               />
+                              {!isTrueFalse && q.options.length > 2 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveOption(qIdx, oIdx)}
+                                  className="h-6 w-6 flex items-center justify-center rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive text-xs"
+                                  title="Remove option"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              )}
                             </div>
                           );
                         })}
                       </div>
 
+                      {/* Add Option Button (Non-True/False questions with < 6 options) */}
+                      {!isTrueFalse && (
+                        <div className="flex items-center justify-between pt-0.5 text-xs text-muted-foreground">
+                          {q.options.length < 6 ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleAddOption(qIdx)}
+                              className="h-7 text-xs text-brand-600 dark:text-brand-400 hover:bg-brand-500/10 gap-1 px-2"
+                            >
+                              <Plus className="h-3 w-3" /> Add Option
+                            </Button>
+                          ) : (
+                            <span />
+                          )}
+                          {isMulti && (
+                            <span className="text-[11px] font-medium text-purple-600 dark:text-purple-400">
+                              💡 Check all correct options for partial credit.
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Explanation */}
                       <div>
                         <Input
                           placeholder="Optional explanation for correct answer..."
                           value={q.explanation ?? ""}
                           onChange={(e) => handleQuestionChange(qIdx, "explanation", e.target.value)}
-                          className="h-7 text-[11px] text-muted-foreground bg-background/40"
+                          className="h-7 text-[11px] text-muted-foreground bg-background/50"
                         />
                       </div>
                     </div>

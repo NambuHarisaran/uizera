@@ -331,6 +331,16 @@ export default function ParticipantLiveQuizPage({
               </p>
             </div>
 
+            {/* Helpful tip for in-app browser QR scans */}
+            <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-3 text-xs text-left text-blue-700 dark:text-blue-300 space-y-1">
+              <p className="font-bold flex items-center gap-1.5">
+                <span>📱</span> Opened from WhatsApp or Instagram?
+              </p>
+              <p className="text-[11px] leading-relaxed text-blue-700/80 dark:text-blue-300/80">
+                If Google sign-in gets stuck, tap <strong>(⋮ or ⋯)</strong> in the top corner and select <strong>&quot;Open in Chrome / Safari&quot;</strong>.
+              </p>
+            </div>
+
             <Button
               size="lg"
               disabled={signingIn}
@@ -414,13 +424,13 @@ export default function ParticipantLiveQuizPage({
         <div className="flex items-center gap-3">
           {!isEnded && !isWaiting && !isLeaderboard && timeLeft !== null && (
             <div
-              className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-mono text-sm font-bold ${
+              className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-mono text-sm font-bold transition-all ${
                 timeLeft <= 5
-                  ? "border-red-500/40 bg-red-500/10 text-red-500 animate-pulse"
+                  ? "border-red-500 bg-red-500/15 text-red-600 dark:text-red-400 animate-pulse scale-105 shadow-sm shadow-red-500/30"
                   : "border-uipath-orange/40 bg-uipath-orange/10 text-uipath-orange"
               }`}
             >
-              <Timer className="h-4 w-4" /> {timeLeft}s
+              <Timer className={`h-4 w-4 ${timeLeft <= 5 ? "animate-spin text-red-500" : ""}`} /> {timeLeft}s
             </div>
           )}
 
@@ -574,36 +584,44 @@ export default function ParticipantLiveQuizPage({
                 </motion.div>
               )}
 
-              {isRevealed && myAnswerForCurrent && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className={`rounded-2xl border p-4 text-sm font-bold flex items-center justify-center gap-2 ${
-                    myAnswerForCurrent.correct
-                      ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-                      : myAnswerForCurrent.correct === false
-                      ? "border-destructive/40 bg-destructive/15 text-destructive"
-                      : "border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300"
-                  }`}
-                >
-                  {myAnswerForCurrent.correct === true ? (
-                    <>
-                      <CheckCircle2 className="h-5 w-5" /> Correct! +{myAnswerForCurrent.points ?? 0} pts ⚡
-                    </>
-                  ) : myAnswerForCurrent.correct === false ? (
-                    <>
-                      <XCircle className="h-5 w-5" /> Not quite — 0 pts
-                    </>
-                  ) : (
-                    // correct is undefined = answer was submitted but reveal data
-                    // not yet loaded. loadData() is triggered by the Firestore
-                    // snapshot and will populate correct/points momentarily.
-                    <>
-                      <Spinner className="h-4 w-4" /> Loading result...
-                    </>
-                  )}
-                </motion.div>
-              )}
+              {isRevealed && myAnswerForCurrent && (() => {
+                const isKnownCorrect =
+                  myAnswerForCurrent.correct === true ||
+                  (revealedCorrect !== null &&
+                    myAnswerForCurrent.selected.some((s) => revealedCorrect.includes(s)));
+                const isKnownIncorrect =
+                  myAnswerForCurrent.correct === false ||
+                  (revealedCorrect !== null &&
+                    !myAnswerForCurrent.selected.some((s) => revealedCorrect.includes(s)));
+
+                return (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className={`rounded-2xl border p-4 text-sm font-bold flex items-center justify-center gap-2 ${
+                      isKnownCorrect
+                        ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                        : isKnownIncorrect
+                        ? "border-destructive/40 bg-destructive/15 text-destructive"
+                        : "border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                    }`}
+                  >
+                    {isKnownCorrect ? (
+                      <>
+                        <CheckCircle2 className="h-5 w-5 text-emerald-500" /> Correct! +{myAnswerForCurrent.points ?? currentQ?.points ?? 100} pts ⚡
+                      </>
+                    ) : isKnownIncorrect ? (
+                      <>
+                        <XCircle className="h-5 w-5 text-destructive" /> Not quite — 0 pts
+                      </>
+                    ) : (
+                      <>
+                        <Spinner className="h-4 w-4" /> Finalizing score...
+                      </>
+                    )}
+                  </motion.div>
+                );
+              })()}
             </Card>
           </motion.div>
         )}

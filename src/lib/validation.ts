@@ -167,7 +167,7 @@ export const certReportSchema = z.object({
 export const certVerifySchema = z.object({
   dayId: certDayIdSchema,
   uids: z.array(z.string().min(1).max(128)).min(1).max(200),
-  status: z.enum(["completed", "pending"]),
+  status: z.enum(["completed", "pending", "rejected"]).default("completed"),
 });
 
 export const certDayUpsertSchema = z.object({

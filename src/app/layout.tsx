@@ -81,6 +81,31 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                function handleChunkError(e) {
+                  var msg = (e && (e.message || (e.reason && e.reason.message))) || '';
+                  var name = (e && (e.name || (e.reason && e.reason.name))) || '';
+                  if (name === 'ChunkLoadError' || /Loading chunk [0-9]+ failed/i.test(msg) || msg.indexOf('ChunkLoadError') !== -1) {
+                    var key = 'uizera_chunk_reload';
+                    var last = sessionStorage.getItem(key);
+                    var now = Date.now();
+                    if (!last || now - parseInt(last, 10) > 15000) {
+                      sessionStorage.setItem(key, now.toString());
+                      window.location.reload();
+                    }
+                  }
+                }
+                window.addEventListener('error', handleChunkError, true);
+                window.addEventListener('unhandledrejection', handleChunkError);
+              })();
+            `,
+          }}
+        />
+      </head>
       <body
         className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} min-h-dvh font-sans`}
       >

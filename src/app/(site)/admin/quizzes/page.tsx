@@ -276,7 +276,7 @@ export default function AdminQuizzesPage() {
       if (newType === "true_false") {
         opts = ["True", "False"];
         correct = [0];
-      } else if (current.type === "true_false" && newType !== "true_false") {
+      } else if (current.type === "true_false") {
         opts = ["Option 1", "Option 2", "Option 3", "Option 4"];
         correct = [0];
       }
